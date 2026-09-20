@@ -1,9 +1,28 @@
+import { NavLink, Route, Routes } from 'react-router-dom'
+import { Library } from './pages/Library'
+import { BookDetail } from './pages/BookDetail'
+import { Sync } from './pages/Sync'
+
 function App() {
   return (
-    <main>
-      <h1>reMarkable Shelf</h1>
-      <p>Frontend scaffold — nothing to see here yet.</p>
-    </main>
+    <>
+      <header className="app-header">
+        <h1 className="app-title">reMarkable Shelf</h1>
+        <nav className="app-nav">
+          <NavLink to="/" end>
+            Library
+          </NavLink>
+          <NavLink to="/sync">Sync</NavLink>
+        </nav>
+      </header>
+      <main>
+        <Routes>
+          <Route path="/" element={<Library />} />
+          <Route path="/books/:id" element={<BookDetail />} />
+          <Route path="/sync" element={<Sync />} />
+        </Routes>
+      </main>
+    </>
   )
 }
 

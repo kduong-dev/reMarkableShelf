@@ -1,0 +1,62 @@
+package store
+
+import (
+	"github.com/ansel1/merry"
+	"github.com/kqvd/reMarkableShelf/backend/internal/models"
+)
+
+// UpsertDocuments replaces the known document set for a device with the
+// freshly-synced list, preserving any existing linked_book_id.
+func (s *Store) UpsertDocuments(deviceID string, docs []models.RemarkableDocument) error {
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return merry.Wrap(err)
+	}
+	defer tx.Rollback()
+
+	for _, doc := range docs {
+		_, err := tx.Exec(
+			`INSERT INTO remarkable_documents (uuid, device_id, title, file_type, last_modified, linked_book_id)
+			 VALUES (?, ?, ?, ?, ?, NULL)
+			 ON CONFLICT(uuid, device_id) DO UPDATE SET
+			   title = excluded.title,
+			   file_type = excluded.file_type,
+			   last_modified = excluded.last_modified`,
+			doc.UUID, deviceID, doc.Title, doc.FileType, doc.LastModified,
+		)
+		if err != nil {
+			return merry.Wrap(err).WithUserMessagef("upserting document %q", doc.UUID)
+		}
+	}
+	return merry.Wrap(tx.Commit())
+}
+
+func (s *Store) ListDocumentsByDevice(deviceID string) ([]models.RemarkableDocument, error) {
+	rows, err := s.DB.Query(
+		`SELECT uuid, device_id, title, file_type, last_modified, linked_book_id
+		 FROM remarkable_documents WHERE device_id = ? ORDER BY last_modified DESC`,
+		deviceID,
+	)
+	if err != nil {
+		return nil, merry.Wrap(err)
+	}
+	defer rows.Close()
+
+	var docs []models.RemarkableDocument
+	for rows.Next() {
+		var d models.RemarkableDocument
+		if err := rows.Scan(&d.UUID, &d.DeviceID, &d.Title, &d.FileType, &d.LastModified, &d.LinkedBookID); err != nil {
+			return nil, merry.Wrap(err)
+		}
+		docs = append(docs, d)
+	}
+	return docs, merry.Wrap(rows.Err())
+}
+
+func (s *Store) LinkDocumentToBook(deviceID, docUUID, bookID string) error {
+	_, err := s.DB.Exec(
+		`UPDATE remarkable_documents SET linked_book_id = ? WHERE device_id = ? AND uuid = ?`,
+		bookID, deviceID, docUUID,
+	)
+	return merry.Wrap(err)
+}

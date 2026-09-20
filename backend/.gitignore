@@ -3,6 +3,9 @@
 *.exe
 *.test
 
+# Local sqlite database
+*.db
+
 # Local environment overrides
 *.local.sh
 init.sh

@@ -13,7 +13,7 @@ import (
 
 func TestSearch(t *testing.T) {
 	Convey("Given a Google Books client", t, func() {
-		client := googlebooks.NewClient()
+		client := googlebooks.NewClient("")
 		Convey("When searching with an empty query", func() {
 			results, err := client.Search("")
 			Convey("Then it returns ErrEmptyQuery without making a request", func() {
@@ -27,7 +27,7 @@ func TestSearch(t *testing.T) {
 			responseWriter.WriteHeader(http.StatusTooManyRequests)
 		}))
 		Reset(server.Close)
-		client := googlebooks.NewClientWithBaseURL(server.URL)
+		client := googlebooks.NewClientWithBaseURL(server.URL, "")
 		Convey("When searching", func() {
 			results, err := client.Search("dune")
 			Convey("Then it returns ErrUpstreamUnavailable", func() {
@@ -55,7 +55,7 @@ func TestSearch(t *testing.T) {
 			}`))
 		}))
 		Reset(server.Close)
-		client := googlebooks.NewClientWithBaseURL(server.URL)
+		client := googlebooks.NewClientWithBaseURL(server.URL, "")
 		Convey("When searching", func() {
 			results, err := client.Search("dune")
 			Convey("Then it maps the volume into a Result, preferring ISBN_13", func() {

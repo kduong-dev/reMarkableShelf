@@ -22,7 +22,7 @@ func main() {
 
 	handler := &api.Handler{
 		Store:       db,
-		GoogleBooks: googlebooks.NewClient(),
+		GoogleBooks: googlebooks.NewClient(config.EnvString("GOOGLE_BOOKS_API_KEY", "")),
 		RemarkableCfg: remarkable.Config{
 			User:     config.EnvString("SSH_USER", "root"),
 			Password: config.EnvString("SSH_PASSWORD", ""),

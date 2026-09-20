@@ -13,8 +13,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>
 }
 
+// requestList wraps request for endpoints that return a JSON array, and
+// normalizes a `null` body (Go's encoding/json for a nil/empty slice) to
+// `[]` so callers can always safely .filter/.map the result.
+async function requestList<T>(path: string, init?: RequestInit): Promise<T[]> {
+  return (await request<T[] | null>(path, init)) ?? []
+}
+
 export const api = {
-  listBooks: () => request<Book[]>('/books'),
+  listBooks: () => requestList<Book>('/books'),
   getBook: (id: string) => request<Book>(`/books/${id}`),
   createBook: (book: Partial<Book>) =>
     request<Book>('/books', { method: 'POST', body: JSON.stringify(book) }),
@@ -22,16 +29,13 @@ export const api = {
     request<Book>(`/books/${id}`, { method: 'PUT', body: JSON.stringify(patch) }),
   deleteBook: (id: string) => request<void>(`/books/${id}`, { method: 'DELETE' }),
 
-  searchBooks: (q: string) =>
-    request<BookSearchResult[]>(`/search/books?q=${encodeURIComponent(q)}`),
+  searchBooks: (q: string) => requestList<BookSearchResult>(`/search/books?q=${encodeURIComponent(q)}`),
 
-  listDevices: () => request<Device[]>('/devices'),
+  listDevices: () => requestList<Device>('/devices'),
   createDevice: (device: Partial<Device>) =>
     request<Device>('/devices', { method: 'POST', body: JSON.stringify(device) }),
-  syncDevice: (id: string) =>
-    request<RemarkableDocument[]>(`/devices/${id}/sync`, { method: 'POST' }),
-  listDocuments: (deviceId: string) =>
-    request<RemarkableDocument[]>(`/devices/${deviceId}/documents`),
+  syncDevice: (id: string) => requestList<RemarkableDocument>(`/devices/${id}/sync`, { method: 'POST' }),
+  listDocuments: (deviceId: string) => requestList<RemarkableDocument>(`/devices/${deviceId}/documents`),
   linkDocument: (deviceId: string, uuid: string, bookId: string) =>
     request<void>(`/devices/${deviceId}/documents/${uuid}/link`, {
       method: 'POST',

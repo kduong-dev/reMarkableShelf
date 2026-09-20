@@ -17,7 +17,7 @@ func (s *Store) ListBooks() ([]models.Book, error) {
 	}
 	defer rows.Close()
 
-	var books []models.Book
+	books := []models.Book{}
 	for rows.Next() {
 		book, err := scanBook(rows)
 		if err != nil {

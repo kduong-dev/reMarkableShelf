@@ -42,7 +42,7 @@ func (s *Store) ListDocumentsByDevice(deviceID string) ([]models.RemarkableDocum
 	}
 	defer rows.Close()
 
-	var docs []models.RemarkableDocument
+	docs := []models.RemarkableDocument{}
 	for rows.Next() {
 		var d models.RemarkableDocument
 		if err := rows.Scan(&d.UUID, &d.DeviceID, &d.Title, &d.FileType, &d.LastModified, &d.LinkedBookID); err != nil {

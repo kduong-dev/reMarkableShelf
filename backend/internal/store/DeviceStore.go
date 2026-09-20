@@ -17,7 +17,7 @@ func (s *Store) ListDevices() ([]models.Device, error) {
 	}
 	defer rows.Close()
 
-	var devices []models.Device
+	devices := []models.Device{}
 	for rows.Next() {
 		d, err := scanDevice(rows)
 		if err != nil {

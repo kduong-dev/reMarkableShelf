@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 
-	"github.com/kqvd/reMarkableShelf/backend/internal/httpx"
+	"github.com/kduong-dev/goutil/httpx"
 )
 
 func (handler *Handler) ListDevices(responseWriter http.ResponseWriter, request *http.Request) {

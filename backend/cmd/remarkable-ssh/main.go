@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/kqvd/reMarkableShelf/backend/internal/config"
-	"github.com/kqvd/reMarkableShelf/backend/internal/fatal"
+	"github.com/kduong-dev/goutil/config"
+	"github.com/kduong-dev/goutil/fatal"
 	"golang.org/x/crypto/ssh"
 )
 

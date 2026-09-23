@@ -4,9 +4,9 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/kduong-dev/goutil/config"
+	"github.com/kduong-dev/goutil/fatal"
 	"github.com/kqvd/reMarkableShelf/backend/internal/api"
-	"github.com/kqvd/reMarkableShelf/backend/internal/config"
-	"github.com/kqvd/reMarkableShelf/backend/internal/fatal"
 	"github.com/kqvd/reMarkableShelf/backend/internal/googlebooks"
 	"github.com/kqvd/reMarkableShelf/backend/internal/remarkable"
 	"github.com/kqvd/reMarkableShelf/backend/internal/store"

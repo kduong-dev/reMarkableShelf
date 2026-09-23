@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	"github.com/kqvd/reMarkableShelf/backend/internal/httpx"
+	"github.com/kduong-dev/goutil/httpx"
 )
 
 func (handler *Handler) DeleteBook(responseWriter http.ResponseWriter, request *http.Request) {

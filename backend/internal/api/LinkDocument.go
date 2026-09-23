@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	"github.com/kqvd/reMarkableShelf/backend/internal/httpx"
+	"github.com/kduong-dev/goutil/httpx"
 )
 
 type linkDocumentRequest struct {

@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/kqvd/reMarkableShelf/backend/internal/httpx"
+	"github.com/kduong-dev/goutil/httpx"
 	"github.com/kqvd/reMarkableShelf/backend/internal/models"
 	"github.com/kqvd/reMarkableShelf/backend/internal/remarkable"
 )

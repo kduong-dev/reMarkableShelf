@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+	"github.com/kduong-dev/goutil/httpx"
 	"github.com/kqvd/reMarkableShelf/backend/internal/googlebooks"
 	"github.com/kqvd/reMarkableShelf/backend/internal/remarkable"
 	"github.com/kqvd/reMarkableShelf/backend/internal/store"
@@ -29,5 +30,5 @@ func NewHandler(handler *Handler) http.Handler {
 	apiRouter.HandleFunc("/devices/{id}/sync", handler.SyncDevice).Methods(http.MethodPost)
 	apiRouter.HandleFunc("/devices/{id}/documents", handler.ListDocuments).Methods(http.MethodGet)
 	apiRouter.HandleFunc("/devices/{id}/documents/{uuid}/link", handler.LinkDocument).Methods(http.MethodPost)
-	return HandlerWithCORS(router)
+	return httpx.HandlerWithCORS(router)
 }

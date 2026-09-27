@@ -37,8 +37,13 @@ func (syncer *Syncer) SyncDevice(deviceID string) ([]models.RemarkableDocument, 
 	if err != nil {
 		return nil, err
 	}
-	documents, err := syncer.remarkable.ListDocuments(device.Host)
-	if merry.Is(err, remarkable.ErrNotPaired) && device.PairedAt != nil {
+	listing, err := syncer.remarkable.ListDocuments(tabletOf(device))
+	switch {
+	case merry.Is(err, remarkable.ErrHostKeyChanged):
+		if markErr := syncer.store.MarkDeviceIdentityChanged(device.ID); markErr != nil {
+			return nil, markErr
+		}
+	case merry.Is(err, remarkable.ErrNotPaired) && device.PairedAt != nil:
 		if unpairErr := syncer.store.SetDevicePairedAt(device.ID, nil); unpairErr != nil {
 			return nil, unpairErr
 		}
@@ -46,6 +51,13 @@ func (syncer *Syncer) SyncDevice(deviceID string) ([]models.RemarkableDocument, 
 	if err != nil {
 		return nil, err
 	}
+	if device.HostKey == "" {
+		if err := syncer.store.SetDeviceHostKey(device.ID, listing.HostKey); err != nil {
+			return nil, err
+		}
+		device.HostKey = listing.HostKey
+	}
+	documents := listing.Documents
 	if err := syncer.store.UpsertDocuments(device.ID, documents); err != nil {
 		return nil, err
 	}
@@ -120,31 +132,54 @@ func (syncer *Syncer) RegisterDevice(input RegisterDeviceInput) (models.Device, 
 	if input.Password == "" {
 		return models.Device{}, merry.Here(ErrPasswordRequired)
 	}
-	if err := syncer.remarkable.Pair(input.Host, input.Password); err != nil {
-		return models.Device{}, err
-	}
-	pairedAt := time.Now().UTC()
-	return syncer.store.CreateDevice(models.Device{Name: input.Name, Host: input.Host, PairedAt: &pairedAt})
-}
-
-// PairDevice pairs an existing device again, e.g. after a factory reset.
-func (syncer *Syncer) PairDevice(deviceID, password string) (models.Device, error) {
-	if password == "" {
-		return models.Device{}, merry.Here(ErrPasswordRequired)
-	}
-	device, err := syncer.store.GetDevice(deviceID)
+	hostKey, err := syncer.remarkable.Pair(remarkable.Tablet{Host: input.Host}, input.Password)
 	if err != nil {
 		return models.Device{}, err
 	}
-	if err := syncer.remarkable.Pair(device.Host, password); err != nil {
+	pairedAt := time.Now().UTC()
+	return syncer.store.CreateDevice(models.Device{Name: input.Name, Host: input.Host, PairedAt: &pairedAt, HostKey: hostKey})
+}
+
+// PairDeviceInput pairs a registered device again. The tablet must present
+// its recorded host key unless AcceptNewIdentity confirms it was
+// factory-reset or replaced; otherwise an impostor could trigger a failed
+// sync to collect the password.
+type PairDeviceInput struct {
+	DeviceID          string
+	Password          string
+	AcceptNewIdentity bool
+}
+
+func (syncer *Syncer) PairDevice(input PairDeviceInput) (models.Device, error) {
+	if input.Password == "" {
+		return models.Device{}, merry.Here(ErrPasswordRequired)
+	}
+	device, err := syncer.store.GetDevice(input.DeviceID)
+	if err != nil {
+		return models.Device{}, err
+	}
+	tablet := tabletOf(device)
+	if input.AcceptNewIdentity {
+		tablet.HostKey = ""
+	}
+	hostKey, err := syncer.remarkable.Pair(tablet, input.Password)
+	if merry.Is(err, remarkable.ErrHostKeyChanged) {
+		if markErr := syncer.store.MarkDeviceIdentityChanged(device.ID); markErr != nil {
+			return models.Device{}, markErr
+		}
+	}
+	if err != nil {
 		return models.Device{}, err
 	}
 	pairedAt := time.Now().UTC()
-	if err := syncer.store.SetDevicePairedAt(device.ID, &pairedAt); err != nil {
+	if err := syncer.store.MarkDevicePaired(device.ID, pairedAt, hostKey); err != nil {
 		return models.Device{}, err
 	}
-	device.PairedAt = &pairedAt
-	return device, nil
+	return syncer.store.GetDevice(device.ID)
+}
+
+func tabletOf(device models.Device) remarkable.Tablet {
+	return remarkable.Tablet{Host: device.Host, HostKey: device.HostKey}
 }
 
 // LinkDocument links a tablet document to a book and applies the position
@@ -194,7 +229,7 @@ func (syncer *Syncer) fetchCovers(device models.Device, listed []models.Remarkab
 		requests = append(requests, remarkable.CoverRequest{DocumentUUID: document.UUID, PageID: document.CoverPageID})
 		modifiedAt[document.UUID] = document.LastModified
 	}
-	images, err := syncer.remarkable.CoverImages(device.Host, requests)
+	images, err := syncer.remarkable.CoverImages(tabletOf(device), requests)
 	if err != nil {
 		logx.Warnf("fetching covers from %s (%s): %v", device.Name, device.Host, err)
 		return nil

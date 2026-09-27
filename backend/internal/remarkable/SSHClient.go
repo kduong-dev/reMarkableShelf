@@ -3,6 +3,7 @@ package remarkable
 import (
 	"bytes"
 	"fmt"
+	"net"
 	"regexp"
 	"strings"
 	"time"
@@ -27,12 +28,12 @@ func NewSSHClient(config Config) *SSHClient {
 // which cover paths are built from, so nothing else reaches the shell.
 var idPattern = regexp.MustCompile(`^[0-9a-f-]+$`)
 
-func (client *SSHClient) CoverImages(host string, requests []CoverRequest) (map[string][]byte, error) {
+func (client *SSHClient) CoverImages(tablet Tablet, requests []CoverRequest) (map[string][]byte, error) {
 	images := make(map[string][]byte, len(requests))
 	if len(requests) == 0 {
 		return images, nil
 	}
-	connection, err := client.dialKey(host)
+	connection, _, err := client.dialKey(tablet)
 	if err != nil {
 		return nil, err
 	}
@@ -57,47 +58,71 @@ func (client *SSHClient) CoverImages(host string, requests []CoverRequest) (map[
 const installKeyScript = `umask 077 && mkdir -p ~/.ssh && touch ~/.ssh/authorized_keys && ` +
 	`(grep -qxF '%[1]s' ~/.ssh/authorized_keys || echo '%[1]s' >> ~/.ssh/authorized_keys)`
 
-func (client *SSHClient) Pair(host, password string) error {
-	connection, err := client.dial(host, ssh.Password(password), ErrWrongPassword)
+// Pair checks the tablet's host key before offering the password, since SSH
+// verifies the server before authenticating, so an impostor never sees it.
+// The key check then pins the host key the password connection saw.
+func (client *SSHClient) Pair(tablet Tablet, password string) (string, error) {
+	connection, hostKey, err := client.dial(tablet, ssh.Password(password), ErrWrongPassword)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer connection.Close()
 	if _, err := run(connection, fmt.Sprintf(installKeyScript, authorizedKey(client.config.Signer))); err != nil {
-		return merry.Wrap(err).WithUserMessage("installing this server's key on the tablet")
+		return "", merry.Wrap(err).WithUserMessage("installing this server's key on the tablet")
 	}
-	verified, err := client.dial(host, ssh.PublicKeys(client.config.Signer), ErrKeyNotAccepted)
+	verified, _, err := client.dial(Tablet{Host: tablet.Host, HostKey: hostKey}, ssh.PublicKeys(client.config.Signer), ErrKeyNotAccepted)
 	if err != nil {
-		return err
+		return "", err
 	}
-	return verified.Close()
+	return hostKey, verified.Close()
 }
 
-// dialKey signs in to host with the server's key, reporting a rejected key
-// as ErrNotPaired.
-func (client *SSHClient) dialKey(host string) (*ssh.Client, error) {
-	return client.dial(host, ssh.PublicKeys(client.config.Signer), ErrNotPaired)
+// dialKey signs in to the tablet with the server's key, reporting a
+// rejected key as ErrNotPaired.
+func (client *SSHClient) dialKey(tablet Tablet) (*ssh.Client, string, error) {
+	return client.dial(tablet, ssh.PublicKeys(client.config.Signer), ErrNotPaired)
 }
 
-// dial connects to host with auth, reporting a failed sign-in as
-// authSentinel and any other failure as ErrTabletUnreachable. x/crypto/ssh
-// reports a failed sign-in only through its message.
-func (client *SSHClient) dial(host string, auth ssh.AuthMethod, authSentinel error) (*ssh.Client, error) {
-	addr := fmt.Sprintf("%s:%s", host, client.config.Port)
+// dial connects to the tablet with auth, returning the host key it
+// presented. It reports a host key other than tablet.HostKey as
+// ErrHostKeyChanged, a failed sign-in as authSentinel, and any other failure
+// as ErrTabletUnreachable. x/crypto/ssh reports a failed sign-in only
+// through its message.
+func (client *SSHClient) dial(tablet Tablet, auth ssh.AuthMethod, authSentinel error) (*ssh.Client, string, error) {
+	addr := fmt.Sprintf("%s:%s", tablet.Host, client.config.Port)
+	var presented string
+	hostKeyChanged := false
 	connection, err := ssh.Dial("tcp", addr, &ssh.ClientConfig{
-		User:            client.config.User,
-		Auth:            []ssh.AuthMethod{auth},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		Timeout:         10 * time.Second,
+		User: client.config.User,
+		Auth: []ssh.AuthMethod{auth},
+		HostKeyCallback: func(_ string, _ net.Addr, key ssh.PublicKey) error {
+			presented = strings.TrimSpace(string(ssh.MarshalAuthorizedKey(key)))
+			if tablet.HostKey != "" && !sameKey(tablet.HostKey, key) {
+				hostKeyChanged = true
+				return ErrHostKeyChanged
+			}
+			return nil
+		},
+		Timeout: 10 * time.Second,
 	})
 	if err == nil {
-		return connection, nil
+		return connection, presented, nil
 	}
 	var sentinel error = ErrTabletUnreachable
-	if strings.Contains(err.Error(), "unable to authenticate") {
+	switch {
+	case hostKeyChanged:
+		sentinel = ErrHostKeyChanged
+	case strings.Contains(err.Error(), "unable to authenticate"):
 		sentinel = authSentinel
 	}
-	return nil, merry.WithCause(merry.Here(sentinel).WithUserMessagef("%s (%s)", merry.UserMessage(sentinel), addr), err)
+	return nil, "", merry.WithCause(merry.Here(sentinel).WithUserMessagef("%s (%s)", merry.UserMessage(sentinel), addr), err)
+}
+
+// sameKey reports whether key is the one recorded as authorized, a line in
+// authorized_keys format.
+func sameKey(authorized string, key ssh.PublicKey) bool {
+	recorded, _, _, _, err := ssh.ParseAuthorizedKey([]byte(authorized))
+	return err == nil && bytes.Equal(recorded.Marshal(), key.Marshal())
 }
 
 // run executes script in a new session and returns what it printed.

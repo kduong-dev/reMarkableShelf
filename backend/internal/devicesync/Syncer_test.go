@@ -15,8 +15,11 @@ import (
 )
 
 // fakeTablet serves whatever documents and covers the test has put on it,
-// failing with listErr or pairErr when set, and records cover requests.
+// presenting hostKey, failing with listErr or pairErr when set, and records
+// cover requests and the tablet it was last asked to reach.
 type fakeTablet struct {
+	hostKey       string
+	lastTarget    remarkable.Tablet
 	covers        map[string][]byte
 	coverRequests []remarkable.CoverRequest
 	documents     []models.RemarkableDocument
@@ -25,11 +28,15 @@ type fakeTablet struct {
 	pairedWith    string
 }
 
-func (tablet *fakeTablet) ListDocuments(host string) ([]models.RemarkableDocument, error) {
-	return tablet.documents, tablet.listErr
+func (tablet *fakeTablet) ListDocuments(target remarkable.Tablet) (remarkable.Listing, error) {
+	tablet.lastTarget = target
+	if tablet.listErr != nil {
+		return remarkable.Listing{}, tablet.listErr
+	}
+	return remarkable.Listing{Documents: tablet.documents, HostKey: tablet.hostKey}, nil
 }
 
-func (tablet *fakeTablet) CoverImages(host string, requests []remarkable.CoverRequest) (map[string][]byte, error) {
+func (tablet *fakeTablet) CoverImages(target remarkable.Tablet, requests []remarkable.CoverRequest) (map[string][]byte, error) {
 	tablet.coverRequests = append(tablet.coverRequests, requests...)
 	images := make(map[string][]byte)
 	for _, request := range requests {
@@ -40,12 +47,13 @@ func (tablet *fakeTablet) CoverImages(host string, requests []remarkable.CoverRe
 	return images, nil
 }
 
-func (tablet *fakeTablet) Pair(host, password string) error {
+func (tablet *fakeTablet) Pair(target remarkable.Tablet, password string) (string, error) {
+	tablet.lastTarget = target
 	if tablet.pairErr != nil {
-		return tablet.pairErr
+		return "", tablet.pairErr
 	}
 	tablet.pairedWith = password
-	return nil
+	return tablet.hostKey, nil
 }
 
 func pages(count int) *int {
@@ -299,6 +307,59 @@ func TestCovers(t *testing.T) {
 	})
 }
 
+func TestTabletIdentity(t *testing.T) {
+	Convey("Given a device registered before host keys were recorded", t, func() {
+		opened, err := store.Open(filepath.Join(t.TempDir(), "books.db"))
+		So(err, ShouldBeNil)
+		Reset(func() { _ = opened.Close() })
+		pairedAt := time.Now().UTC()
+		device, err := opened.CreateDevice(models.Device{Name: "Paper Pro", Host: "10.0.0.5", PairedAt: &pairedAt})
+		So(err, ShouldBeNil)
+		tablet := &fakeTablet{hostKey: "ssh-ed25519 AAAA-real-tablet"}
+		syncer := devicesync.NewSyncer(opened, tablet)
+		Convey("When it syncs", func() {
+			_, err := syncer.SyncDevice(device.ID)
+			Convey("Then the host key it presented is recorded and required from then on", func() {
+				So(err, ShouldBeNil)
+				stored, err := opened.GetDevice(device.ID)
+				So(err, ShouldBeNil)
+				So(stored.HostKey, ShouldEqual, "ssh-ed25519 AAAA-real-tablet")
+				_, err = syncer.SyncDevice(device.ID)
+				So(err, ShouldBeNil)
+				So(tablet.lastTarget.HostKey, ShouldEqual, "ssh-ed25519 AAAA-real-tablet")
+			})
+		})
+		Convey("And later something presents a different host key", func() {
+			_, err := syncer.SyncDevice(device.ID)
+			So(err, ShouldBeNil)
+			tablet.listErr = merry.Here(remarkable.ErrHostKeyChanged)
+			_, err = syncer.SyncDevice(device.ID)
+			Convey("Then the sync fails and the device is unpaired with its identity flagged", func() {
+				So(merry.Is(err, remarkable.ErrHostKeyChanged), ShouldBeTrue)
+				stored, err := opened.GetDevice(device.ID)
+				So(err, ShouldBeNil)
+				So(stored.PairedAt, ShouldBeNil)
+				So(stored.IdentityChanged, ShouldBeTrue)
+			})
+			Convey("Then pairing again still requires the recorded host key", func() {
+				tablet.pairErr = merry.Here(remarkable.ErrHostKeyChanged)
+				_, err := syncer.PairDevice(devicesync.PairDeviceInput{DeviceID: device.ID, Password: "secret"})
+				So(merry.Is(err, remarkable.ErrHostKeyChanged), ShouldBeTrue)
+				So(tablet.lastTarget.HostKey, ShouldEqual, "ssh-ed25519 AAAA-real-tablet")
+			})
+			Convey("Then pairing with the new identity accepted records the new host key", func() {
+				tablet.hostKey = "ssh-ed25519 AAAA-reset-tablet"
+				repaired, err := syncer.PairDevice(devicesync.PairDeviceInput{DeviceID: device.ID, Password: "secret", AcceptNewIdentity: true})
+				So(err, ShouldBeNil)
+				So(tablet.lastTarget.HostKey, ShouldBeEmpty)
+				So(repaired.PairedAt, ShouldNotBeNil)
+				So(repaired.IdentityChanged, ShouldBeFalse)
+				So(repaired.HostKey, ShouldEqual, "ssh-ed25519 AAAA-reset-tablet")
+			})
+		})
+	})
+}
+
 func TestPairing(t *testing.T) {
 	Convey("Given a syncer with no devices", t, func() {
 		opened, err := store.Open(filepath.Join(t.TempDir(), "books.db"))
@@ -330,7 +391,7 @@ func TestPairing(t *testing.T) {
 				})
 				Convey("Then pairing it again marks it paired", func() {
 					tablet.listErr = nil
-					repaired, err := syncer.PairDevice(device.ID, "secret")
+					repaired, err := syncer.PairDevice(devicesync.PairDeviceInput{DeviceID: device.ID, Password: "secret"})
 					So(err, ShouldBeNil)
 					So(repaired.PairedAt, ShouldNotBeNil)
 				})

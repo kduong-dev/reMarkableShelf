@@ -41,8 +41,13 @@ export const api = {
   // The password pairs the tablet with the server's key; it isn't stored.
   createDevice: (device: { name: string; host: string; password: string }) =>
     request<Device>('/devices', { method: 'POST', body: JSON.stringify(device) }),
-  pairDevice: (id: string, password: string) =>
-    request<Device>(`/devices/${id}/pair`, { method: 'POST', body: JSON.stringify({ password }) }),
+  // acceptNewIdentity confirms a tablet whose identity changed was reset or
+  // replaced; without it, pairing refuses a changed identity.
+  pairDevice: (id: string, password: string, acceptNewIdentity = false) =>
+    request<Device>(`/devices/${id}/pair`, {
+      method: 'POST',
+      body: JSON.stringify({ password, acceptNewIdentity }),
+    }),
   syncDevice: (id: string) => requestList<RemarkableDocument>(`/devices/${id}/sync`, { method: 'POST' }),
   listDocuments: (deviceId: string) => requestList<RemarkableDocument>(`/devices/${deviceId}/documents`),
   unlinkDocument: (deviceId: string, uuid: string) =>

@@ -18,6 +18,7 @@ export function Sync() {
   const [registerError, setRegisterError] = useState<string | null>(null)
   const [pairPassword, setPairPassword] = useState('')
   const [pairing, setPairing] = useState(false)
+  const [acceptNewIdentity, setAcceptNewIdentity] = useState(false)
   // The tablet document being matched to a book on Open Library.
   const [finding, setFinding] = useState<RemarkableDocument | null>(null)
 
@@ -56,11 +57,14 @@ export function Sync() {
     setPairing(true)
     setError(null)
     try {
-      const device = await api.pairDevice(selected, pairPassword)
+      const device = await api.pairDevice(selected, pairPassword, acceptNewIdentity)
       setDevices((prev) => prev.map((d) => (d.id === device.id ? device : d)))
       setPairPassword('')
+      setAcceptNewIdentity(false)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'failed to pair the tablet')
+      // A refused identity change flags the device, so pick up its state.
+      api.listDevices().then(setDevices)
     } finally {
       setPairing(false)
     }
@@ -168,11 +172,30 @@ export function Sync() {
       )}
 
       {selectedDevice && !selectedDevice.pairedAt && (
-        <form className="pair-form" onSubmit={pair}>
-          <p>
-            <strong>{selectedDevice.name}</strong> isn't paired with this server, so it can't sync.
-            Enter the tablet's password to pair it.
-          </p>
+        <form className={selectedDevice.identityChanged ? 'pair-form pair-form-warning' : 'pair-form'} onSubmit={pair}>
+          {selectedDevice.identityChanged ? (
+            <>
+              <p>
+                <strong>The tablet at {selectedDevice.host} identified itself differently</strong> than
+                when {selectedDevice.name} was paired, so syncing has stopped. If you factory-reset or
+                replaced the tablet, confirm below and pair it again. If you didn't, don't enter the
+                password: something on your network may be impersonating it.
+              </p>
+              <label className="pair-confirm">
+                <input
+                  type="checkbox"
+                  checked={acceptNewIdentity}
+                  onChange={(e) => setAcceptNewIdentity(e.target.checked)}
+                />
+                I factory-reset or replaced this tablet
+              </label>
+            </>
+          ) : (
+            <p>
+              <strong>{selectedDevice.name}</strong> isn't paired with this server, so it can't sync.
+              Enter the tablet's password to pair it.
+            </p>
+          )}
           <input
             type="password"
             autoComplete="off"
@@ -180,7 +203,11 @@ export function Sync() {
             value={pairPassword}
             onChange={(e) => setPairPassword(e.target.value)}
           />
-          <button type="submit" className="primary" disabled={pairing || !pairPassword}>
+          <button
+            type="submit"
+            className="primary"
+            disabled={pairing || !pairPassword || (selectedDevice.identityChanged && !acceptNewIdentity)}
+          >
             {pairing ? 'Pairing…' : 'Pair'}
           </button>
         </form>

@@ -596,6 +596,17 @@ a:hover {
   border-radius: var(--radius);
 }
 
+.pair-form-warning {
+  border-color: var(--danger);
+}
+
+.pair-confirm {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .pair-form p {
   flex-basis: 100%;
   margin: 0 0 4px;

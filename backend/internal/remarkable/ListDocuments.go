@@ -35,17 +35,18 @@ done`
 // (excluding folders) found in the tablet's xochitl document store,
 // classified as pdf/epub/notebook per Classify, with the page each was last
 // left open on.
-func (client *SSHClient) ListDocuments(host string) ([]models.RemarkableDocument, error) {
-	connection, err := client.dialKey(host)
+func (client *SSHClient) ListDocuments(tablet Tablet) (Listing, error) {
+	connection, hostKey, err := client.dialKey(tablet)
 	if err != nil {
-		return nil, err
+		return Listing{}, err
 	}
 	defer connection.Close()
 	output, err := run(connection, "cd '"+client.config.DocumentsDir+"' && "+listScript)
 	if err != nil {
-		return nil, merry.Wrap(err).WithUserMessage("listing the tablet's documents")
+		return Listing{}, merry.Wrap(err).WithUserMessage("listing the tablet's documents")
 	}
-	return ParseListOutput(output)
+	documents, err := ParseListOutput(output)
+	return Listing{Documents: documents, HostKey: hostKey}, err
 }
 
 // ParseListOutput parses what listScript prints into documents, skipping

@@ -15,6 +15,8 @@ CREATE TABLE IF NOT EXISTS books (
 	open_library_id   TEXT NOT NULL DEFAULT '',
 	page_count        INTEGER,
 	current_page      INTEGER,
+	progress_updated_at DATETIME,
+	progress_source   TEXT NOT NULL DEFAULT '',
 	created_at        DATETIME NOT NULL,
 	updated_at        DATETIME NOT NULL
 );
@@ -33,11 +35,30 @@ CREATE TABLE IF NOT EXISTS remarkable_documents (
 	file_type       TEXT NOT NULL,
 	last_modified   DATETIME,
 	linked_book_id  TEXT REFERENCES books(id) ON DELETE SET NULL,
+	current_page    INTEGER,
+	page_count      INTEGER,
+	position_updated_at DATETIME,
 	PRIMARY KEY (uuid, device_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_remarkable_documents_device ON remarkable_documents(device_id);
 `
+
+// addedColumns are the columns added to the schema after its tables were
+// first created, in the order they were added.
+var addedColumns = []struct {
+	table      string
+	name       string
+	definition string
+}{
+	{"books", "page_count", "INTEGER"},
+	{"books", "current_page", "INTEGER"},
+	{"books", "progress_updated_at", "DATETIME"},
+	{"books", "progress_source", "TEXT NOT NULL DEFAULT ''"},
+	{"remarkable_documents", "current_page", "INTEGER"},
+	{"remarkable_documents", "page_count", "INTEGER"},
+	{"remarkable_documents", "position_updated_at", "DATETIME"},
+}
 
 func (s *Store) migrate() error {
 	if err := s.renameGoogleBooksIDColumn(); err != nil {
@@ -47,8 +68,8 @@ func (s *Store) migrate() error {
 	if err != nil {
 		return merry.Wrap(err).WithUserMessage("running database migrations")
 	}
-	for _, column := range []string{"page_count", "current_page"} {
-		if err := s.addColumnIfMissing("books", column, "INTEGER"); err != nil {
+	for _, column := range addedColumns {
+		if err := s.addColumnIfMissing(column.table, column.name, column.definition); err != nil {
 			return err
 		}
 	}

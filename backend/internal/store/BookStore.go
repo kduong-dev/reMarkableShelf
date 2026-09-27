@@ -11,7 +11,7 @@ import (
 )
 
 func (s *Store) ListBooks() ([]models.Book, error) {
-	rows, err := s.DB.Query(`SELECT id, title, author, isbn, cover_url, status, rating, source, open_library_id, page_count, current_page, created_at, updated_at FROM books ORDER BY updated_at DESC`)
+	rows, err := s.DB.Query(`SELECT id, title, author, isbn, cover_url, status, rating, source, open_library_id, page_count, current_page, progress_updated_at, progress_source, created_at, updated_at FROM books ORDER BY updated_at DESC`)
 	if err != nil {
 		return nil, merry.Wrap(err)
 	}
@@ -29,7 +29,7 @@ func (s *Store) ListBooks() ([]models.Book, error) {
 }
 
 func (s *Store) GetBook(id string) (models.Book, error) {
-	row := s.DB.QueryRow(`SELECT id, title, author, isbn, cover_url, status, rating, source, open_library_id, page_count, current_page, created_at, updated_at FROM books WHERE id = ?`, id)
+	row := s.DB.QueryRow(`SELECT id, title, author, isbn, cover_url, status, rating, source, open_library_id, page_count, current_page, progress_updated_at, progress_source, created_at, updated_at FROM books WHERE id = ?`, id)
 	book, err := scanBook(row)
 	if err == sql.ErrNoRows {
 		return models.Book{}, merry.New("book not found").WithHTTPCode(http.StatusNotFound).WithUserMessagef("no book with id %q", id)
@@ -53,11 +53,15 @@ func (s *Store) CreateBook(book models.Book) (models.Book, error) {
 	}
 	now := time.Now().UTC()
 	book.CreatedAt, book.UpdatedAt = now, now
+	book.ProgressUpdatedAt, book.ProgressSource = nil, ""
+	if book.CurrentPage != nil {
+		book.ProgressUpdatedAt, book.ProgressSource = &now, models.ProgressSourceApp
+	}
 
 	_, err := s.DB.Exec(
-		`INSERT INTO books (id, title, author, isbn, cover_url, status, rating, source, open_library_id, page_count, current_page, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		book.ID, book.Title, book.Author, book.ISBN, book.CoverURL, book.Status, book.Rating, book.Source, book.OpenLibraryID, book.PageCount, book.CurrentPage, book.CreatedAt, book.UpdatedAt,
+		`INSERT INTO books (id, title, author, isbn, cover_url, status, rating, source, open_library_id, page_count, current_page, progress_updated_at, progress_source, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		book.ID, book.Title, book.Author, book.ISBN, book.CoverURL, book.Status, book.Rating, book.Source, book.OpenLibraryID, book.PageCount, book.CurrentPage, book.ProgressUpdatedAt, book.ProgressSource, book.CreatedAt, book.UpdatedAt,
 	)
 	if err != nil {
 		return models.Book{}, merry.Wrap(err).WithUserMessage("creating book")
@@ -89,22 +93,57 @@ func (s *Store) UpdateBook(id string, patch models.Book) (models.Book, error) {
 	if patch.PageCount != nil {
 		existing.PageCount = patch.PageCount
 	}
+	existing.UpdatedAt = time.Now().UTC()
 	if patch.CurrentPage != nil {
 		existing.CurrentPage = patch.CurrentPage
+		existing.ProgressUpdatedAt, existing.ProgressSource = &existing.UpdatedAt, models.ProgressSourceApp
 	}
 	if err := validateProgress(existing); err != nil {
 		return models.Book{}, err
 	}
-	existing.UpdatedAt = time.Now().UTC()
 
 	_, err = s.DB.Exec(
-		`UPDATE books SET title = ?, author = ?, isbn = ?, cover_url = ?, status = ?, rating = ?, page_count = ?, current_page = ?, updated_at = ? WHERE id = ?`,
-		existing.Title, existing.Author, existing.ISBN, existing.CoverURL, existing.Status, existing.Rating, existing.PageCount, existing.CurrentPage, existing.UpdatedAt, existing.ID,
+		`UPDATE books SET title = ?, author = ?, isbn = ?, cover_url = ?, status = ?, rating = ?, page_count = ?, current_page = ?, progress_updated_at = ?, progress_source = ?, updated_at = ? WHERE id = ?`,
+		existing.Title, existing.Author, existing.ISBN, existing.CoverURL, existing.Status, existing.Rating, existing.PageCount, existing.CurrentPage, existing.ProgressUpdatedAt, existing.ProgressSource, existing.UpdatedAt, existing.ID,
 	)
 	if err != nil {
 		return models.Book{}, merry.Wrap(err).WithUserMessage("updating book")
 	}
 	return existing, nil
+}
+
+// SetTabletProgressInput is a reading position taken from a tablet, already
+// mapped onto the book's pages. UpdatedAt is when the tablet recorded it.
+type SetTabletProgressInput struct {
+	BookID      string
+	CurrentPage int
+	PageCount   int
+	Status      models.BookStatus
+	UpdatedAt   time.Time
+}
+
+// SetTabletProgress moves a book's bookmark to a position synced from a
+// tablet, stamping it with the tablet's time rather than now so that a later
+// change in the app still counts as newer.
+func (s *Store) SetTabletProgress(input SetTabletProgressInput) (models.Book, error) {
+	book, err := s.GetBook(input.BookID)
+	if err != nil {
+		return models.Book{}, err
+	}
+	book.CurrentPage, book.PageCount, book.Status = &input.CurrentPage, &input.PageCount, input.Status
+	book.ProgressUpdatedAt, book.ProgressSource = &input.UpdatedAt, models.ProgressSourceRemarkable
+	book.UpdatedAt = time.Now().UTC()
+	if err := validateProgress(book); err != nil {
+		return models.Book{}, err
+	}
+	_, err = s.DB.Exec(
+		`UPDATE books SET status = ?, page_count = ?, current_page = ?, progress_updated_at = ?, progress_source = ?, updated_at = ? WHERE id = ?`,
+		book.Status, book.PageCount, book.CurrentPage, book.ProgressUpdatedAt, book.ProgressSource, book.UpdatedAt, book.ID,
+	)
+	if err != nil {
+		return models.Book{}, merry.Wrap(err).WithUserMessage("updating book progress")
+	}
+	return book, nil
 }
 
 func (s *Store) DeleteBook(id string) error {
@@ -139,7 +178,7 @@ type rowScanner interface {
 
 func scanBook(row rowScanner) (models.Book, error) {
 	var b models.Book
-	err := row.Scan(&b.ID, &b.Title, &b.Author, &b.ISBN, &b.CoverURL, &b.Status, &b.Rating, &b.Source, &b.OpenLibraryID, &b.PageCount, &b.CurrentPage, &b.CreatedAt, &b.UpdatedAt)
+	err := row.Scan(&b.ID, &b.Title, &b.Author, &b.ISBN, &b.CoverURL, &b.Status, &b.Rating, &b.Source, &b.OpenLibraryID, &b.PageCount, &b.CurrentPage, &b.ProgressUpdatedAt, &b.ProgressSource, &b.CreatedAt, &b.UpdatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return models.Book{}, err

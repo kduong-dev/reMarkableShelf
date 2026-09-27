@@ -5,22 +5,22 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/kduong-dev/goutil/httpx"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/devicesync"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/openlibrary"
-	"github.com/kduong-dev/reMarkableShelf/backend/internal/remarkable"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/store"
 )
 
 type NewHandlerInput struct {
-	Store            *store.Store
-	OpenLibrary      openlibrary.API
-	RemarkableConfig remarkable.Config
+	Store       *store.Store
+	OpenLibrary openlibrary.API
+	Syncer      *devicesync.Syncer
 }
 
 func NewHandler(input NewHandlerInput) http.Handler {
 	api := &API{
-		store:            input.Store,
-		openLibrary:      input.OpenLibrary,
-		remarkableConfig: input.RemarkableConfig,
+		store:       input.Store,
+		openLibrary: input.OpenLibrary,
+		syncer:      input.Syncer,
 	}
 	router := mux.NewRouter().StrictSlash(true)
 	apiRouter := router.PathPrefix("/api").Subrouter()

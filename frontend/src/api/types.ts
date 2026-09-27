@@ -13,6 +13,8 @@ export interface Book {
   openLibraryId?: string
   pageCount?: number
   currentPage?: number
+  progressUpdatedAt?: string
+  progressSource?: 'app' | 'remarkable'
   createdAt: string
   updatedAt: string
 }
@@ -33,6 +35,9 @@ export interface RemarkableDocument {
   fileType: RemarkableFileType
   lastModified: string
   linkedBookId?: string
+  currentPage?: number
+  pageCount?: number
+  positionUpdatedAt?: string
 }
 
 export interface BookSearchResult {

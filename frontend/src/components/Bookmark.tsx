@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { api } from '../api/client'
 import type { Book, BookStatus } from '../api/types'
 import { progressPercent } from '../progress'
+import { timeAgo } from '../timeAgo'
 
 // statusForPage moves a book along the shelf as its bookmark moves: starting
 // it marks it Reading, reaching the last page marks it Finished, and moving
@@ -62,6 +63,9 @@ export function Bookmark({ book, onSaved }: { book: Book; onSaved: () => void })
           <div className="progress-fill" style={{ width: `${percent ?? 0}%` }} />
         </div>
       ) : null}
+      {book.progressSource === 'remarkable' && book.progressUpdatedAt && (
+        <p className="bookmark-source">From your reMarkable · {timeAgo(book.progressUpdatedAt)}</p>
+      )}
       <form className="bookmark-form" onSubmit={save}>
         <label>
           On page

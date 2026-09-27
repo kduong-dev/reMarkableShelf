@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { Bookmark } from '../components/Bookmark'
+import { useRefreshOnFocus } from '../useRefreshOnFocus'
 import type { Book, BookStatus } from '../api/types'
 
 const statusOptions: Array<{ label: string; value: BookStatus }> = [
@@ -16,13 +17,15 @@ export function BookDetail() {
   const [book, setBook] = useState<Book | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
+  function load() {
     if (!id) return
     api
       .getBook(id)
       .then(setBook)
       .catch((err) => setError(err instanceof Error ? err.message : 'failed to load book'))
-  }, [id])
+  }
+  useEffect(load, [id])
+  useRefreshOnFocus(load)
 
   async function updateStatus(status: BookStatus) {
     if (!book) return

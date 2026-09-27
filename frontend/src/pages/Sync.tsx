@@ -121,6 +121,11 @@ export function Sync() {
             {bookDocs.map((doc) => (
               <li key={doc.uuid} className="doc-row">
                 <span className="doc-title">{doc.title}</span>
+                {doc.currentPage && doc.pageCount && (
+                  <span className="doc-position">
+                    p. {doc.currentPage} / {doc.pageCount}
+                  </span>
+                )}
                 <span className={`badge badge-filetype`}>{doc.fileType}</span>
                 {doc.linkedBookId ? (
                   <span className="linked">Linked to collection</span>

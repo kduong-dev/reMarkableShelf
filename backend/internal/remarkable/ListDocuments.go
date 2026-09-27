@@ -3,7 +3,6 @@ package remarkable
 import (
 	"bytes"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -35,23 +34,24 @@ done`
 
 // ListDocuments SSHes into the given host and returns every document
 // (excluding folders) found in the tablet's xochitl document store,
-// classified as pdf/epub/notebook per Classify.
-func ListDocuments(host string, cfg Config) ([]models.RemarkableDocument, error) {
-	addr := fmt.Sprintf("%s:%s", host, cfg.Port)
+// classified as pdf/epub/notebook per Classify, with the page each was last
+// left open on.
+func (client *SSHClient) ListDocuments(host string) ([]models.RemarkableDocument, error) {
+	addr := fmt.Sprintf("%s:%s", host, client.config.Port)
 	sshConfig := &ssh.ClientConfig{
-		User:            cfg.User,
-		Auth:            []ssh.AuthMethod{ssh.Password(cfg.Password)},
+		User:            client.config.User,
+		Auth:            []ssh.AuthMethod{ssh.Password(client.config.Password)},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		Timeout:         10 * time.Second,
 	}
 
-	client, err := ssh.Dial("tcp", addr, sshConfig)
+	connection, err := ssh.Dial("tcp", addr, sshConfig)
 	if err != nil {
 		return nil, merry.Wrap(err).WithUserMessagef("connecting to tablet at %s", addr)
 	}
-	defer client.Close()
+	defer connection.Close()
 
-	session, err := client.NewSession()
+	session, err := connection.NewSession()
 	if err != nil {
 		return nil, merry.Wrap(err).WithUserMessage("opening SSH session")
 	}
@@ -64,10 +64,12 @@ func ListDocuments(host string, cfg Config) ([]models.RemarkableDocument, error)
 		return nil, merry.Wrap(err).WithUserMessagef("listing documents: %s", stderr.String())
 	}
 
-	return parseListOutput(stdout.String())
+	return ParseListOutput(stdout.String())
 }
 
-func parseListOutput(output string) ([]models.RemarkableDocument, error) {
+// ParseListOutput parses what listScript prints into documents, skipping
+// folders and records it can't parse.
+func ParseListOutput(output string) ([]models.RemarkableDocument, error) {
 	var docs []models.RemarkableDocument
 
 	for _, record := range strings.Split(output, sepRecordStart) {
@@ -97,9 +99,9 @@ func parseListOutput(output string) ([]models.RemarkableDocument, error) {
 
 		c, _ := parseContent([]byte(metaAndContent[1]))
 
-		lastModified := time.Now().UTC()
-		if ms, err := strconv.ParseInt(meta.LastModified, 10, 64); err == nil {
-			lastModified = time.UnixMilli(ms).UTC()
+		lastModified, ok := parseMillis(meta.LastModified)
+		if !ok {
+			lastModified = time.Now().UTC()
 		}
 
 		title := meta.VisibleName
@@ -107,12 +109,18 @@ func parseListOutput(output string) ([]models.RemarkableDocument, error) {
 			title = uuid
 		}
 
-		docs = append(docs, models.RemarkableDocument{
+		document := models.RemarkableDocument{
 			UUID:         uuid,
 			Title:        title,
 			FileType:     Classify(c.FileType),
 			LastModified: lastModified,
-		})
+		}
+		if position, ok := documentPosition(meta, c); ok {
+			document.CurrentPage = &position.currentPage
+			document.PageCount = &position.pageCount
+			document.PositionUpdatedAt = &position.updatedAt
+		}
+		docs = append(docs, document)
 	}
 
 	return docs, nil

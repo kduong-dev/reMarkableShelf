@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api/client'
 import { BookCard } from '../components/BookCard'
 import { SearchModal } from '../components/SearchModal'
+import { useRefreshOnFocus } from '../useRefreshOnFocus'
 import type { Book, BookStatus } from '../api/types'
 
 const filters: Array<{ label: string; value: BookStatus | 'all' }> = [
@@ -19,13 +20,15 @@ export function Library() {
   const [query, setQuery] = useState('')
   const [showAdd, setShowAdd] = useState(false)
 
-  useEffect(() => {
+  function load() {
     api
       .listBooks()
       .then(setBooks)
       .catch((err) => setError(err instanceof Error ? err.message : 'failed to load books'))
       .finally(() => setLoading(false))
-  }, [])
+  }
+  useEffect(load, [])
+  useRefreshOnFocus(load)
 
   const visible = useMemo(() => {
     return books

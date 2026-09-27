@@ -19,6 +19,7 @@ export function Sync() {
   const [pairPassword, setPairPassword] = useState('')
   const [pairing, setPairing] = useState(false)
   const [acceptNewIdentity, setAcceptNewIdentity] = useState(false)
+  const [renaming, setRenaming] = useState<string | null>(null)
   // The tablet document being matched to a book on Open Library.
   const [finding, setFinding] = useState<RemarkableDocument | null>(null)
 
@@ -97,6 +98,19 @@ export function Sync() {
     await linkToExisting(doc, book.id)
   }
 
+  async function renameDevice(e: React.FormEvent) {
+    e.preventDefault()
+    if (!selected || !renaming?.trim()) return
+    setError(null)
+    try {
+      const device = await api.renameDevice(selected, renaming)
+      setDevices((prev) => prev.map((d) => (d.id === device.id ? device : d)))
+      setRenaming(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'failed to rename device')
+    }
+  }
+
   async function removeDevice() {
     const device = devices.find((d) => d.id === selected)
     if (!device) return
@@ -169,13 +183,31 @@ export function Sync() {
 
       {devices.length > 0 && (
         <div className="toolbar">
-          <select value={selected} onChange={(e) => setSelected(e.target.value)}>
-            {devices.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name} ({d.host})
-              </option>
-            ))}
-          </select>
+          {renaming !== null ? (
+            <form className="rename-form" onSubmit={renameDevice}>
+              <input
+                autoFocus
+                aria-label="Device name"
+                value={renaming}
+                onChange={(e) => setRenaming(e.target.value)}
+                onKeyDown={(e) => e.key === 'Escape' && setRenaming(null)}
+              />
+              <button type="submit" className="primary" disabled={!renaming.trim()}>
+                Save
+              </button>
+              <button type="button" onClick={() => setRenaming(null)}>
+                Cancel
+              </button>
+            </form>
+          ) : (
+            <select value={selected} onChange={(e) => setSelected(e.target.value)}>
+              {devices.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name} ({d.host})
+                </option>
+              ))}
+            </select>
+          )}
           <button className="primary" onClick={sync} disabled={syncing || !selectedDevice?.pairedAt}>
             {syncing ? 'Syncing…' : 'Sync now'}
           </button>
@@ -184,9 +216,14 @@ export function Sync() {
               Last synced {new Date(devices.find((d) => d.id === selected)!.lastSyncedAt!).toLocaleString()}
             </span>
           )}
-          <button className="text-button remove-device" onClick={removeDevice}>
-            Remove device
-          </button>
+          <div className="device-actions">
+            <button className="text-button" onClick={() => setRenaming(selectedDevice?.name ?? '')}>
+              Rename
+            </button>
+            <button className="text-button" onClick={removeDevice}>
+              Remove device
+            </button>
+          </div>
         </div>
       )}
 

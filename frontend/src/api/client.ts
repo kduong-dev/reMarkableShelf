@@ -41,6 +41,8 @@ export const api = {
   // The password pairs the tablet with the server's key; it isn't stored.
   createDevice: (device: { name: string; host: string; password: string }) =>
     request<Device>('/devices', { method: 'POST', body: JSON.stringify(device) }),
+  renameDevice: (id: string, name: string) =>
+    request<Device>(`/devices/${id}`, { method: 'PUT', body: JSON.stringify({ name }) }),
   deleteDevice: (id: string) => request<void>(`/devices/${id}`, { method: 'DELETE' }),
   // acceptNewIdentity confirms a tablet whose identity changed was reset or
   // replaced; without it, pairing refuses a changed identity.

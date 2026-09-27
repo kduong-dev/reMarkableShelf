@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/ansel1/merry"
@@ -79,6 +80,22 @@ func (s *Store) SetDeviceHostKey(id, hostKey string) error {
 func (s *Store) MarkDeviceIdentityChanged(id string) error {
 	_, err := s.DB.Exec(`UPDATE devices SET paired_at = NULL, identity_changed = 1 WHERE id = ?`, id)
 	return merry.Wrap(err)
+}
+
+// RenameDevice changes a device's name, returning the renamed device.
+func (s *Store) RenameDevice(id, name string) (models.Device, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return models.Device{}, merry.Here(ErrDeviceNameRequired)
+	}
+	result, err := s.DB.Exec(`UPDATE devices SET name = ? WHERE id = ?`, name, id)
+	if err != nil {
+		return models.Device{}, merry.Wrap(err).WithUserMessage("renaming device")
+	}
+	if count, _ := result.RowsAffected(); count == 0 {
+		return models.Device{}, merry.New("device not found").WithHTTPCode(http.StatusNotFound).WithUserMessagef("no device with id %q", id)
+	}
+	return s.GetDevice(id)
 }
 
 // DeleteDevice removes a device and, by cascade, its synced documents.

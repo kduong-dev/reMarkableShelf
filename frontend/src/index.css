@@ -612,8 +612,15 @@ a:hover {
   margin: 0 0 4px;
 }
 
-.remove-device {
+.device-actions {
+  display: flex;
+  gap: 12px;
   margin-left: auto;
+}
+
+.rename-form {
+  display: flex;
+  gap: 8px;
 }
 
 .last-synced {

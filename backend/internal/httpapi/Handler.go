@@ -32,6 +32,7 @@ func NewHandler(input NewHandlerInput) http.Handler {
 	apiRouter.HandleFunc("/search/books", api.SearchBooks).Methods(http.MethodGet)
 	apiRouter.HandleFunc("/devices", api.ListDevices).Methods(http.MethodGet)
 	apiRouter.HandleFunc("/devices", api.CreateDevice).Methods(http.MethodPost)
+	apiRouter.HandleFunc("/devices/{id}", api.UpdateDevice).Methods(http.MethodPut)
 	apiRouter.HandleFunc("/devices/{id}", api.DeleteDevice).Methods(http.MethodDelete)
 	apiRouter.HandleFunc("/devices/{id}/pair", api.PairDevice).Methods(http.MethodPost)
 	apiRouter.HandleFunc("/devices/{id}/sync", api.SyncDevice).Methods(http.MethodPost)

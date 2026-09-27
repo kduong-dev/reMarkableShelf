@@ -1,4 +1,4 @@
-package api
+package httpapi
 
 import (
 	"net/http"
@@ -11,7 +11,7 @@ type linkDocumentRequest struct {
 	BookID string `json:"bookId"`
 }
 
-func (handler *Handler) LinkDocument(responseWriter http.ResponseWriter, request *http.Request) {
+func (api *API) LinkDocument(responseWriter http.ResponseWriter, request *http.Request) {
 	var err error
 	defer func() {
 		if err != nil {
@@ -25,7 +25,7 @@ func (handler *Handler) LinkDocument(responseWriter http.ResponseWriter, request
 	vars := mux.Vars(request)
 	bookID := vars["id"]
 	documentUUID := vars["uuid"]
-	err = handler.Store.LinkDocumentToBook(bookID, documentUUID, body.BookID)
+	err = api.store.LinkDocumentToBook(bookID, documentUUID, body.BookID)
 	if err != nil {
 		return
 	}

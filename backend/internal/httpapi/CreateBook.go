@@ -1,4 +1,4 @@
-package api
+package httpapi
 
 import (
 	"net/http"
@@ -7,7 +7,7 @@ import (
 	"github.com/kqvd/reMarkableShelf/backend/internal/models"
 )
 
-func (handler *Handler) CreateBook(responseWriter http.ResponseWriter, request *http.Request) {
+func (api *API) CreateBook(responseWriter http.ResponseWriter, request *http.Request) {
 	var err error
 	defer func() {
 		if err != nil {
@@ -18,7 +18,7 @@ func (handler *Handler) CreateBook(responseWriter http.ResponseWriter, request *
 	if err != nil {
 		return
 	}
-	book, err := handler.Store.CreateBook(body)
+	book, err := api.store.CreateBook(body)
 	if err != nil {
 		return
 	}

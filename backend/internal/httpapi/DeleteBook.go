@@ -1,4 +1,4 @@
-package api
+package httpapi
 
 import (
 	"net/http"
@@ -7,7 +7,7 @@ import (
 	"github.com/kduong-dev/goutil/httpx"
 )
 
-func (handler *Handler) DeleteBook(responseWriter http.ResponseWriter, request *http.Request) {
+func (api *API) DeleteBook(responseWriter http.ResponseWriter, request *http.Request) {
 	var err error
 	defer func() {
 		if err != nil {
@@ -16,7 +16,7 @@ func (handler *Handler) DeleteBook(responseWriter http.ResponseWriter, request *
 	}()
 	vars := mux.Vars(request)
 	bookID := vars["id"]
-	err = handler.Store.DeleteBook(bookID)
+	err = api.store.DeleteBook(bookID)
 	if err != nil {
 		return
 	}

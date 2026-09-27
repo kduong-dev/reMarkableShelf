@@ -1,4 +1,4 @@
-package api
+package httpapi
 
 import (
 	"net/http"
@@ -6,14 +6,14 @@ import (
 	"github.com/kduong-dev/goutil/httpx"
 )
 
-func (handler *Handler) ListBooks(responseWriter http.ResponseWriter, request *http.Request) {
+func (api *API) ListBooks(responseWriter http.ResponseWriter, request *http.Request) {
 	var err error
 	defer func() {
 		if err != nil {
 			httpx.SendErrorResponse(responseWriter, err)
 		}
 	}()
-	books, err := handler.Store.ListBooks()
+	books, err := api.store.ListBooks()
 	if err != nil {
 		return
 	}

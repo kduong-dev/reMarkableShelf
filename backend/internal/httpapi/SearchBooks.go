@@ -1,4 +1,4 @@
-package api
+package httpapi
 
 import (
 	"net/http"
@@ -6,7 +6,7 @@ import (
 	"github.com/kduong-dev/goutil/httpx"
 )
 
-func (handler *Handler) SearchBooks(responseWriter http.ResponseWriter, request *http.Request) {
+func (api *API) SearchBooks(responseWriter http.ResponseWriter, request *http.Request) {
 	var err error
 	defer func() {
 		if err != nil {
@@ -14,7 +14,7 @@ func (handler *Handler) SearchBooks(responseWriter http.ResponseWriter, request 
 		}
 	}()
 	query := request.URL.Query().Get("q")
-	results, err := handler.GoogleBooks.Search(query)
+	results, err := api.googleBooks.Search(query)
 	if err != nil {
 		return
 	}

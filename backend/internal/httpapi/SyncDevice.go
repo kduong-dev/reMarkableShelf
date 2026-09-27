@@ -1,4 +1,4 @@
-package api
+package httpapi
 
 import (
 	"net/http"
@@ -15,7 +15,7 @@ import (
 // best-effort auto-links pdf/epub documents to an existing book by exact
 // (case-insensitive) title match. Notebooks are stored but never
 // auto-linked — see models.FileType.
-func (handler *Handler) SyncDevice(responseWriter http.ResponseWriter, request *http.Request) {
+func (api *API) SyncDevice(responseWriter http.ResponseWriter, request *http.Request) {
 	var err error
 	defer func() {
 		if err != nil {
@@ -24,39 +24,39 @@ func (handler *Handler) SyncDevice(responseWriter http.ResponseWriter, request *
 	}()
 	vars := mux.Vars(request)
 	deviceID := vars["id"]
-	device, err := handler.Store.GetDevice(deviceID)
+	device, err := api.store.GetDevice(deviceID)
 	if err != nil {
 		return
 	}
-	documents, err := remarkable.ListDocuments(device.Host, handler.RemarkableCfg)
+	documents, err := remarkable.ListDocuments(device.Host, api.remarkableConfig)
 	if err != nil {
 		return
 	}
-	err = handler.Store.UpsertDocuments(device.ID, documents)
+	err = api.store.UpsertDocuments(device.ID, documents)
 	if err != nil {
 		return
 	}
-	err = handler.Store.TouchDeviceSyncedAt(device.ID, time.Now().UTC())
+	err = api.store.TouchDeviceSyncedAt(device.ID, time.Now().UTC())
 	if err != nil {
 		return
 	}
-	err = handler.autoLinkDocuments(device.ID)
+	err = api.autoLinkDocuments(device.ID)
 	if err != nil {
 		return
 	}
-	syncedDocuments, err := handler.Store.ListDocumentsByDevice(device.ID)
+	syncedDocuments, err := api.store.ListDocumentsByDevice(device.ID)
 	if err != nil {
 		return
 	}
 	httpx.SendJSONResponse(responseWriter, http.StatusOK, syncedDocuments)
 }
 
-func (handler *Handler) autoLinkDocuments(deviceID string) error {
-	documents, err := handler.Store.ListDocumentsByDevice(deviceID)
+func (api *API) autoLinkDocuments(deviceID string) error {
+	documents, err := api.store.ListDocumentsByDevice(deviceID)
 	if err != nil {
 		return err
 	}
-	books, err := handler.Store.ListBooks()
+	books, err := api.store.ListBooks()
 	if err != nil {
 		return err
 	}
@@ -72,7 +72,7 @@ func (handler *Handler) autoLinkDocuments(deviceID string) error {
 		if !found {
 			continue
 		}
-		if err := handler.Store.LinkDocumentToBook(deviceID, document.UUID, book.ID); err != nil {
+		if err := api.store.LinkDocumentToBook(deviceID, document.UUID, book.ID); err != nil {
 			return err
 		}
 	}

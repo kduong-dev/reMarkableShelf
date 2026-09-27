@@ -1,4 +1,4 @@
-package api
+package httpapi
 
 import (
 	"net/http"
@@ -7,7 +7,7 @@ import (
 	"github.com/kduong-dev/goutil/httpx"
 )
 
-func (handler *Handler) ListDocuments(responseWriter http.ResponseWriter, request *http.Request) {
+func (api *API) ListDocuments(responseWriter http.ResponseWriter, request *http.Request) {
 	var err error
 	defer func() {
 		if err != nil {
@@ -16,7 +16,7 @@ func (handler *Handler) ListDocuments(responseWriter http.ResponseWriter, reques
 	}()
 	vars := mux.Vars(request)
 	deviceID := vars["id"]
-	documents, err := handler.Store.ListDocumentsByDevice(deviceID)
+	documents, err := api.store.ListDocumentsByDevice(deviceID)
 	if err != nil {
 		return
 	}

@@ -1,4 +1,4 @@
-package api
+package httpapi
 
 import (
 	"net/http"
@@ -7,7 +7,7 @@ import (
 	"github.com/kqvd/reMarkableShelf/backend/internal/models"
 )
 
-func (handler *Handler) CreateDevice(responseWriter http.ResponseWriter, request *http.Request) {
+func (api *API) CreateDevice(responseWriter http.ResponseWriter, request *http.Request) {
 	var err error
 	defer func() {
 		if err != nil {
@@ -18,7 +18,7 @@ func (handler *Handler) CreateDevice(responseWriter http.ResponseWriter, request
 	if err != nil {
 		return
 	}
-	device, err := handler.Store.CreateDevice(body)
+	device, err := api.store.CreateDevice(body)
 	if err != nil {
 		return
 	}

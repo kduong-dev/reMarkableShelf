@@ -10,12 +10,13 @@ import (
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/models"
 )
 
-// selectBooks reads every book column plus the cover path of one linked
-// tablet document with a synced cover, which the API serves at
-// /api/devices/{device}/documents/{uuid}/cover.
+// selectBooks reads every book column plus, from linked tablet documents,
+// the path of a synced cover, which the API serves at
+// /api/devices/{device}/documents/{uuid}/cover, and the tablet's page count.
 const selectBooks = `SELECT id, title, author, isbn, cover_url, status, rating, source, open_library_id, page_count, current_page, progress_updated_at, progress_source, created_at, updated_at,
 	(SELECT '/api/devices/' || device_id || '/documents/' || uuid || '/cover' FROM remarkable_documents
-	 WHERE linked_book_id = books.id AND cover_image IS NOT NULL LIMIT 1)
+	 WHERE linked_book_id = books.id AND cover_image IS NOT NULL LIMIT 1),
+	(SELECT page_count FROM remarkable_documents WHERE linked_book_id = books.id AND page_count IS NOT NULL LIMIT 1)
 	FROM books`
 
 func (s *Store) ListBooks() ([]models.Book, error) {
@@ -199,7 +200,7 @@ type rowScanner interface {
 func scanBook(row rowScanner) (models.Book, error) {
 	var b models.Book
 	var tabletCoverURL sql.NullString
-	err := row.Scan(&b.ID, &b.Title, &b.Author, &b.ISBN, &b.CoverURL, &b.Status, &b.Rating, &b.Source, &b.OpenLibraryID, &b.PageCount, &b.CurrentPage, &b.ProgressUpdatedAt, &b.ProgressSource, &b.CreatedAt, &b.UpdatedAt, &tabletCoverURL)
+	err := row.Scan(&b.ID, &b.Title, &b.Author, &b.ISBN, &b.CoverURL, &b.Status, &b.Rating, &b.Source, &b.OpenLibraryID, &b.PageCount, &b.CurrentPage, &b.ProgressUpdatedAt, &b.ProgressSource, &b.CreatedAt, &b.UpdatedAt, &tabletCoverURL, &b.TabletPageCount)
 	b.TabletCoverURL = tabletCoverURL.String
 	if err != nil {
 		if err == sql.ErrNoRows {

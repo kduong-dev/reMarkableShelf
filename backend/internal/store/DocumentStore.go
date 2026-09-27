@@ -41,10 +41,19 @@ func (s *Store) UpsertDocuments(deviceID string, docs []models.RemarkableDocumen
 }
 
 func (s *Store) ListDocumentsByDevice(deviceID string) ([]models.RemarkableDocument, error) {
+	return s.listDocuments(`device_id = ?`, deviceID)
+}
+
+// ListDocumentsByBook lists the tablet documents linked to a book.
+func (s *Store) ListDocumentsByBook(bookID string) ([]models.RemarkableDocument, error) {
+	return s.listDocuments(`linked_book_id = ?`, bookID)
+}
+
+func (s *Store) listDocuments(where, arg string) ([]models.RemarkableDocument, error) {
 	rows, err := s.DB.Query(
 		`SELECT uuid, device_id, title, file_type, last_modified, linked_book_id, current_page, page_count, position_updated_at, book_title, book_author, auto_link_dismissed, cover_image IS NOT NULL, cover_checked_at
-		 FROM remarkable_documents WHERE device_id = ? ORDER BY last_modified DESC`,
-		deviceID,
+		 FROM remarkable_documents WHERE `+where+` ORDER BY last_modified DESC`,
+		arg,
 	)
 	if err != nil {
 		return nil, merry.Wrap(err)

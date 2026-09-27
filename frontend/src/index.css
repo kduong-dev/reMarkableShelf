@@ -808,6 +808,11 @@ a:hover {
   color: var(--text-muted);
 }
 
+.bookmark-form input:read-only {
+  background: transparent;
+  color: var(--text-muted);
+}
+
 .bookmark-form input {
   width: 88px;
 }

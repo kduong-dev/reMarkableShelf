@@ -12,9 +12,8 @@ import (
 //   - the book is Finished, since opening a finished book to look something
 //     up shouldn't reopen it.
 //
-// Tablet pages rarely match the book's pages (an EPUB is laid out by the
-// tablet), so the position carries over as a fraction of the way through.
-// A book of unknown length takes the tablet's pages as its own.
+// A linked book is read on the tablet, so it takes the tablet's pages as its
+// own and the position carries over page for page.
 func tabletProgress(book models.Book, document models.RemarkableDocument) (store.SetTabletProgressInput, bool) {
 	if document.CurrentPage == nil || document.PageCount == nil || document.PositionUpdatedAt == nil {
 		return store.SetTabletProgressInput{}, false
@@ -26,10 +25,6 @@ func tabletProgress(book models.Book, document models.RemarkableDocument) (store
 		return store.SetTabletProgressInput{}, false
 	}
 	pageCount, currentPage := *document.PageCount, *document.CurrentPage
-	if book.PageCount != nil {
-		pageCount = *book.PageCount
-		currentPage = models.ScalePage(*document.CurrentPage, *document.PageCount, pageCount)
-	}
 	status := models.StatusReading
 	if currentPage >= pageCount {
 		status = models.StatusFinished

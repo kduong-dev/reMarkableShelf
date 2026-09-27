@@ -87,14 +87,20 @@ export function Bookmark({ book, onSaved }: { book: Book; onSaved: () => void })
             placeholder="?"
             value={total}
             onChange={(e) => setTotal(e.target.value)}
+            readOnly={book.tabletPageCount !== undefined}
+            title={book.tabletPageCount !== undefined ? 'Follows your reMarkable copy' : undefined}
           />
         </label>
         <button type="submit" className="primary" disabled={saving || invalid}>
           {saving ? 'Saving…' : 'Save'}
         </button>
       </form>
-      {!book.pageCount && (
-        <p className="bookmark-hint">Add the page count to track your progress as a percentage.</p>
+      {book.tabletPageCount !== undefined ? (
+        <p className="bookmark-hint">Pages match your reMarkable copy.</p>
+      ) : (
+        !book.pageCount && (
+          <p className="bookmark-hint">Add the page count to track your progress as a percentage.</p>
+        )
       )}
       {error && <p className="error">{error}</p>}
     </div>

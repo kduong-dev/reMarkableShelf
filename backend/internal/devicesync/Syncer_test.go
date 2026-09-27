@@ -98,9 +98,9 @@ func TestSyncDevice(t *testing.T) {
 			So(err, ShouldBeNil)
 			tablet.documents = []models.RemarkableDocument{openedDocument("Dune", 42, 171, tabletTime)}
 			book := sync()
-			Convey("Then the document is linked by title and the bookmark moves the same fraction through the book", func() {
-				So(*book.CurrentPage, ShouldEqual, 134)
-				So(*book.PageCount, ShouldEqual, 544)
+			Convey("Then the document is linked by title and the book takes the tablet's page and page count", func() {
+				So(*book.CurrentPage, ShouldEqual, 42)
+				So(*book.PageCount, ShouldEqual, 171)
 				So(book.Status, ShouldEqual, models.StatusReading)
 				So(book.ProgressSource, ShouldEqual, models.ProgressSourceRemarkable)
 				So(*book.ProgressUpdatedAt, ShouldEqual, tabletTime)
@@ -112,17 +112,17 @@ func TestSyncDevice(t *testing.T) {
 				So(*documents[0].PageCount, ShouldEqual, 171)
 			})
 			Convey("And the bookmark is then changed in the app", func() {
-				_, err := opened.UpdateBook(book.ID, models.Book{CurrentPage: pages(200)})
+				_, err := opened.UpdateBook(book.ID, models.Book{CurrentPage: pages(60)})
 				So(err, ShouldBeNil)
 				Convey("Then syncing the same tablet position again leaves the app's bookmark", func() {
 					book := sync()
-					So(*book.CurrentPage, ShouldEqual, 200)
+					So(*book.CurrentPage, ShouldEqual, 60)
 					So(book.ProgressSource, ShouldEqual, models.ProgressSourceApp)
 				})
 				Convey("Then a later tablet position replaces it", func() {
 					tablet.documents = []models.RemarkableDocument{openedDocument("Dune", 100, 171, time.Now().UTC().Add(time.Minute))}
 					book := sync()
-					So(*book.CurrentPage, ShouldEqual, 318)
+					So(*book.CurrentPage, ShouldEqual, 100)
 					So(book.ProgressSource, ShouldEqual, models.ProgressSourceRemarkable)
 				})
 			})
@@ -143,8 +143,19 @@ func TestSyncDevice(t *testing.T) {
 			tablet.documents = []models.RemarkableDocument{openedDocument("Dune", 171, 171, tabletTime)}
 			book := sync()
 			Convey("Then the book is marked Finished on its last page", func() {
-				So(*book.CurrentPage, ShouldEqual, 544)
+				So(*book.CurrentPage, ShouldEqual, 171)
 				So(book.Status, ShouldEqual, models.StatusFinished)
+			})
+		})
+		Convey("When a bookmarked book is linked to a document with no newer position", func() {
+			_, err := opened.CreateBook(models.Book{Title: "Dune", PageCount: pages(544), CurrentPage: pages(272)})
+			So(err, ShouldBeNil)
+			tablet.documents = []models.RemarkableDocument{openedDocument("Dune", 10, 171, tabletTime)}
+			book := sync()
+			Convey("Then it still takes the tablet's page count, keeping the bookmark's place", func() {
+				So(*book.PageCount, ShouldEqual, 171)
+				So(*book.CurrentPage, ShouldEqual, 86)
+				So(book.ProgressSource, ShouldEqual, models.ProgressSourceApp)
 			})
 		})
 		Convey("When a Finished book is opened on the tablet partway through", func() {
@@ -187,11 +198,42 @@ func TestLinkDocument(t *testing.T) {
 			book, err := opened.CreateBook(models.Book{Title: "How to Win Friends and Influence People", PageCount: pages(280)})
 			So(err, ShouldBeNil)
 			So(syncer.LinkDocument(device.ID, "document-1", book.ID), ShouldBeNil)
-			Convey("Then the book takes the tablet's position straight away", func() {
+			Convey("Then the book takes the tablet's page and page count straight away", func() {
 				linked, err := opened.GetBook(book.ID)
 				So(err, ShouldBeNil)
-				So(*linked.CurrentPage, ShouldEqual, 69)
+				So(*linked.CurrentPage, ShouldEqual, 42)
+				So(*linked.PageCount, ShouldEqual, 171)
+				So(*linked.TabletPageCount, ShouldEqual, 171)
 				So(linked.Status, ShouldEqual, models.StatusReading)
+			})
+		})
+	})
+}
+
+func TestAlignBook(t *testing.T) {
+	Convey("Given a book linked to a 171-page tablet document open on page 42", t, func() {
+		opened, err := store.Open(filepath.Join(t.TempDir(), "books.db"))
+		So(err, ShouldBeNil)
+		Reset(func() { _ = opened.Close() })
+		device, err := opened.CreateDevice(models.Device{Name: "Paper Pro", Host: "10.0.0.5"})
+		So(err, ShouldBeNil)
+		book, err := opened.CreateBook(models.Book{Title: "Dune"})
+		So(err, ShouldBeNil)
+		tablet := &fakeTablet{documents: []models.RemarkableDocument{
+			openedDocument("Dune", 42, 171, time.Now().UTC().Add(-time.Hour).Truncate(time.Millisecond)),
+		}}
+		syncer := devicesync.NewSyncer(opened, tablet)
+		_, err = syncer.SyncDevice(device.ID)
+		So(err, ShouldBeNil)
+		Convey("When an edit gives the book another edition's page count", func() {
+			_, err := opened.UpdateBook(book.ID, models.Book{PageCount: pages(280)})
+			So(err, ShouldBeNil)
+			So(syncer.AlignBook(book.ID), ShouldBeNil)
+			Convey("Then aligning puts it back on the tablet's pages", func() {
+				aligned, err := opened.GetBook(book.ID)
+				So(err, ShouldBeNil)
+				So(*aligned.PageCount, ShouldEqual, 171)
+				So(*aligned.CurrentPage, ShouldEqual, 42)
 			})
 		})
 	})

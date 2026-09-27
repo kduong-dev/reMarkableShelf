@@ -289,13 +289,32 @@ func (syncer *Syncer) applyTabletProgress(documents []models.RemarkableDocument)
 		if err != nil {
 			return err
 		}
-		input, ok := tabletProgress(book, document)
-		if !ok {
+		if input, ok := tabletProgress(book, document); ok {
+			if _, err := syncer.store.SetTabletProgress(input); err != nil {
+				return err
+			}
 			continue
 		}
-		if _, err := syncer.store.SetTabletProgress(input); err != nil {
-			return err
+		// With no newer position to take, still align the book to the
+		// tablet's page count; the store keeps the bookmark's place.
+		if document.PageCount != nil && (book.PageCount == nil || *book.PageCount != *document.PageCount) {
+			if _, err := syncer.store.UpdateBook(book.ID, models.Book{PageCount: document.PageCount}); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
+}
+
+// AlignBook brings a book back in line with its linked tablet documents
+// after it's edited, e.g. when matching it to an edition set another page
+// count.
+func (syncer *Syncer) AlignBook(bookID string) error {
+	syncer.mutex.Lock()
+	defer syncer.mutex.Unlock()
+	documents, err := syncer.store.ListDocumentsByBook(bookID)
+	if err != nil {
+		return err
+	}
+	return syncer.applyTabletProgress(documents)
 }

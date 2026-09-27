@@ -16,6 +16,7 @@ export interface Book {
   progressUpdatedAt?: string
   progressSource?: 'app' | 'remarkable'
   tabletCoverUrl?: string
+  tabletPageCount?: number
   createdAt: string
   updatedAt: string
 }

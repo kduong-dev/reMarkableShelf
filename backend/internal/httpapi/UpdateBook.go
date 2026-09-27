@@ -24,7 +24,17 @@ func (api *API) UpdateBook(responseWriter http.ResponseWriter, request *http.Req
 	api.applyEditionPageCount(&body)
 	vars := mux.Vars(request)
 	bookID := vars["id"]
-	book, err := api.store.UpdateBook(bookID, body)
+	_, err = api.store.UpdateBook(bookID, body)
+	if err != nil {
+		return
+	}
+	// A book linked to a tablet document keeps the tablet's page count, so
+	// undo any other count the update set.
+	err = api.syncer.AlignBook(bookID)
+	if err != nil {
+		return
+	}
+	book, err := api.store.GetBook(bookID)
 	if err != nil {
 		return
 	}

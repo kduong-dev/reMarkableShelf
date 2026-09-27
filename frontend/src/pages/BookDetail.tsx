@@ -20,6 +20,8 @@ export function BookDetail() {
   const [book, setBook] = useState<Book | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [matching, setMatching] = useState(false)
+  const [editing, setEditing] = useState<{ title: string; author: string } | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   function load() {
     if (!id) return
@@ -37,6 +39,18 @@ export function BookDetail() {
     const currentPage = status === 'finished' && book.pageCount ? book.pageCount : undefined
     const updated = await api.updateBook(book.id, { status, currentPage })
     setBook(updated)
+  }
+
+  async function saveDetails(e: React.FormEvent) {
+    e.preventDefault()
+    if (!book || !editing || !editing.title.trim()) return
+    setSaveError(null)
+    try {
+      setBook(await api.updateBook(book.id, { title: editing.title.trim(), author: editing.author.trim() }))
+      setEditing(null)
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'failed to save')
+    }
   }
 
   async function remove() {
@@ -61,15 +75,48 @@ export function BookDetail() {
           <div className="book-detail-cover book-detail-cover-empty">{book.title.slice(0, 1)}</div>
         )}
         <div>
-          <h1>{book.title}</h1>
-          <p className="book-detail-author">{book.author}</p>
+          {editing ? (
+            <form className="details-form" onSubmit={saveDetails}>
+              <label>
+                Title
+                <input
+                  autoFocus
+                  value={editing.title}
+                  onChange={(e) => setEditing({ ...editing, title: e.target.value })}
+                />
+              </label>
+              <label>
+                Author
+                <input value={editing.author} onChange={(e) => setEditing({ ...editing, author: e.target.value })} />
+              </label>
+              <div className="details-form-actions">
+                <button type="submit" className="primary" disabled={!editing.title.trim()}>
+                  Save
+                </button>
+                <button type="button" onClick={() => setEditing(null)}>
+                  Cancel
+                </button>
+              </div>
+              {saveError && <p className="error">{saveError}</p>}
+            </form>
+          ) : (
+            <>
+              <h1>{book.title}</h1>
+              <p className="book-detail-author">{book.author}</p>
+            </>
+          )}
           {book.source === 'remarkable' && (
             <span className="badge badge-remarkable">Synced from reMarkable</span>
           )}
-          {!book.openLibraryId && (
-            <button className="text-button find-match" onClick={() => setMatching(true)}>
-              Find on Open Library
-            </button>
+          {!editing && (
+            <div className="detail-actions">
+              <button className="text-button" onClick={() => setEditing({ title: book.title, author: book.author })}>
+                Edit details
+              </button>
+              <button className="text-button" onClick={() => setMatching(true)}>
+                {book.openLibraryId ? 'Change match' : 'Find on Open Library'}
+              </button>
+            </div>
           )}
           <div className="status-picker">
             {statusOptions.map((opt) => (

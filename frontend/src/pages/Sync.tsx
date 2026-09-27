@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import { bookFromResult } from '../bookFromResult'
 import type { Book, Device, RemarkableDocument } from '../api/types'
@@ -90,6 +91,11 @@ export function Sync() {
     const book = await api.createBook({ title: doc.title, author: '', source: 'remarkable' })
     setBooks((prev) => [book, ...prev])
     await linkToExisting(doc, book.id)
+  }
+
+  async function unlink(doc: RemarkableDocument) {
+    await api.unlinkDocument(selected, doc.uuid)
+    setDocs((prev) => prev.map((d) => (d.uuid === doc.uuid ? { ...d, linkedBookId: undefined } : d)))
   }
 
   async function linkToExisting(doc: RemarkableDocument, bookId: string) {
@@ -196,7 +202,15 @@ export function Sync() {
                 )}
                 <span className={`badge badge-filetype`}>{doc.fileType}</span>
                 {doc.linkedBookId ? (
-                  <span className="linked">Linked to collection</span>
+                  <span className="linked">
+                    Linked to{' '}
+                    <Link to={`/books/${doc.linkedBookId}`}>
+                      {books.find((b) => b.id === doc.linkedBookId)?.title ?? 'a book'}
+                    </Link>
+                    <button className="text-button" onClick={() => unlink(doc)}>
+                      Unlink
+                    </button>
+                  </span>
                 ) : (
                   <div className="doc-actions">
                     <select onChange={(e) => linkToExisting(doc, e.target.value)} defaultValue="">

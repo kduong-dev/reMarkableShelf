@@ -1,6 +1,8 @@
 package store
 
 import (
+	"net/http"
+
 	"github.com/ansel1/merry"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/models"
 )
@@ -38,7 +40,7 @@ func (s *Store) UpsertDocuments(deviceID string, docs []models.RemarkableDocumen
 
 func (s *Store) ListDocumentsByDevice(deviceID string) ([]models.RemarkableDocument, error) {
 	rows, err := s.DB.Query(
-		`SELECT uuid, device_id, title, file_type, last_modified, linked_book_id, current_page, page_count, position_updated_at, book_title, book_author
+		`SELECT uuid, device_id, title, file_type, last_modified, linked_book_id, current_page, page_count, position_updated_at, book_title, book_author, auto_link_dismissed
 		 FROM remarkable_documents WHERE device_id = ? ORDER BY last_modified DESC`,
 		deviceID,
 	)
@@ -50,7 +52,7 @@ func (s *Store) ListDocumentsByDevice(deviceID string) ([]models.RemarkableDocum
 	docs := []models.RemarkableDocument{}
 	for rows.Next() {
 		var d models.RemarkableDocument
-		if err := rows.Scan(&d.UUID, &d.DeviceID, &d.Title, &d.FileType, &d.LastModified, &d.LinkedBookID, &d.CurrentPage, &d.PageCount, &d.PositionUpdatedAt, &d.BookTitle, &d.BookAuthor); err != nil {
+		if err := rows.Scan(&d.UUID, &d.DeviceID, &d.Title, &d.FileType, &d.LastModified, &d.LinkedBookID, &d.CurrentPage, &d.PageCount, &d.PositionUpdatedAt, &d.BookTitle, &d.BookAuthor, &d.AutoLinkDismissed); err != nil {
 			return nil, merry.Wrap(err)
 		}
 		docs = append(docs, d)
@@ -60,8 +62,24 @@ func (s *Store) ListDocumentsByDevice(deviceID string) ([]models.RemarkableDocum
 
 func (s *Store) LinkDocumentToBook(deviceID, docUUID, bookID string) error {
 	_, err := s.DB.Exec(
-		`UPDATE remarkable_documents SET linked_book_id = ? WHERE device_id = ? AND uuid = ?`,
+		`UPDATE remarkable_documents SET linked_book_id = ?, auto_link_dismissed = 0 WHERE device_id = ? AND uuid = ?`,
 		bookID, deviceID, docUUID,
 	)
 	return merry.Wrap(err)
+}
+
+// UnlinkDocument detaches a document from its book and stops sync linking
+// it again by title.
+func (s *Store) UnlinkDocument(deviceID, docUUID string) error {
+	result, err := s.DB.Exec(
+		`UPDATE remarkable_documents SET linked_book_id = NULL, auto_link_dismissed = 1 WHERE device_id = ? AND uuid = ?`,
+		deviceID, docUUID,
+	)
+	if err != nil {
+		return merry.Wrap(err).WithUserMessage("unlinking document")
+	}
+	if count, _ := result.RowsAffected(); count == 0 {
+		return merry.New("document not found").WithHTTPCode(http.StatusNotFound).WithUserMessagef("no document %q on that device", docUUID)
+	}
+	return nil
 }

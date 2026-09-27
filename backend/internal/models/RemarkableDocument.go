@@ -22,6 +22,8 @@ const (
 // on the document, used to tell whether its position is newer than the app's.
 // BookTitle and BookAuthor are read from the file itself when the tablet
 // could (usually EPUBs), whereas Title is its name in the tablet's library.
+// AutoLinkDismissed records that the user unlinked the document, so sync
+// doesn't link it again by title.
 type RemarkableDocument struct {
 	UUID              string     `json:"uuid"`
 	DeviceID          string     `json:"deviceId"`
@@ -34,4 +36,5 @@ type RemarkableDocument struct {
 	PositionUpdatedAt *time.Time `json:"positionUpdatedAt,omitempty"`
 	BookTitle         string     `json:"bookTitle,omitempty"`
 	BookAuthor        string     `json:"bookAuthor,omitempty"`
+	AutoLinkDismissed bool       `json:"-"`
 }

@@ -176,6 +176,36 @@ func TestLinkDocument(t *testing.T) {
 	})
 }
 
+func TestUnlinkDocument(t *testing.T) {
+	Convey("Given a tablet document auto-linked to the book of the same title", t, func() {
+		opened, err := store.Open(filepath.Join(t.TempDir(), "books.db"))
+		So(err, ShouldBeNil)
+		Reset(func() { _ = opened.Close() })
+		device, err := opened.CreateDevice(models.Device{Name: "Paper Pro", Host: "10.0.0.5"})
+		So(err, ShouldBeNil)
+		book, err := opened.CreateBook(models.Book{Title: "Dune"})
+		So(err, ShouldBeNil)
+		tablet := &fakeTablet{documents: []models.RemarkableDocument{{UUID: "document-1", Title: "Dune", FileType: models.FileTypePDF, LastModified: time.Now().UTC()}}}
+		syncer := devicesync.NewSyncer(opened, tablet)
+		linkedTo := func() *string {
+			documents, err := syncer.SyncDevice(device.ID)
+			So(err, ShouldBeNil)
+			return documents[0].LinkedBookID
+		}
+		So(*linkedTo(), ShouldEqual, book.ID)
+		Convey("When the user unlinks it and the tablet syncs again", func() {
+			So(opened.UnlinkDocument(device.ID, "document-1"), ShouldBeNil)
+			Convey("Then sync doesn't link it again by title", func() {
+				So(linkedTo(), ShouldBeNil)
+			})
+			Convey("Then the user can still link it by hand", func() {
+				So(syncer.LinkDocument(device.ID, "document-1", book.ID), ShouldBeNil)
+				So(*linkedTo(), ShouldEqual, book.ID)
+			})
+		})
+	})
+}
+
 func TestPairing(t *testing.T) {
 	Convey("Given a syncer with no devices", t, func() {
 		opened, err := store.Open(filepath.Join(t.TempDir(), "books.db"))

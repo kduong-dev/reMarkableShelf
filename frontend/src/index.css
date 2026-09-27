@@ -646,10 +646,40 @@ a:hover {
   color: var(--ink);
 }
 
-.find-match {
-  display: block;
+.detail-actions {
+  display: flex;
+  gap: 16px;
   margin-top: 4px;
+}
+
+.detail-actions .text-button {
   padding-left: 0;
+}
+
+.details-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 420px;
+  margin-bottom: 8px;
+}
+
+.details-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.details-form input {
+  color: var(--ink);
+  font-size: 1rem;
+}
+
+.details-form-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .doc-position {
@@ -665,7 +695,14 @@ a:hover {
 }
 
 .linked {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.linked .text-button {
   font-size: 0.875rem;
 }
 

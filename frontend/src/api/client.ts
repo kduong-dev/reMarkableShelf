@@ -45,6 +45,8 @@ export const api = {
     request<Device>(`/devices/${id}/pair`, { method: 'POST', body: JSON.stringify({ password }) }),
   syncDevice: (id: string) => requestList<RemarkableDocument>(`/devices/${id}/sync`, { method: 'POST' }),
   listDocuments: (deviceId: string) => requestList<RemarkableDocument>(`/devices/${deviceId}/documents`),
+  unlinkDocument: (deviceId: string, uuid: string) =>
+    request<void>(`/devices/${deviceId}/documents/${uuid}/link`, { method: 'DELETE' }),
   linkDocument: (deviceId: string, uuid: string, bookId: string) =>
     request<void>(`/devices/${deviceId}/documents/${uuid}/link`, {
       method: 'POST',

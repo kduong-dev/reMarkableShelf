@@ -12,7 +12,7 @@ function statusForPage(book: Book, currentPage: number, pageCount?: number): Boo
   return book.status
 }
 
-export function Bookmark({ book, onChange }: { book: Book; onChange: (book: Book) => void }) {
+export function Bookmark({ book, onSaved }: { book: Book; onSaved: () => void }) {
   const [page, setPage] = useState(String(book.currentPage ?? ''))
   const [total, setTotal] = useState(String(book.pageCount ?? ''))
   const [saving, setSaving] = useState(false)
@@ -34,15 +34,14 @@ export function Bookmark({ book, onChange }: { book: Book; onChange: (book: Book
     setSaving(true)
     setError(null)
     try {
-      const updated = await api.updateBook(book.id, {
+      await api.updateBook(book.id, {
         currentPage: pageNumber,
         pageCount: totalNumber,
         status: statusForPage(book, pageNumber, totalNumber),
       })
-      onChange(updated)
+      onSaved()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'failed to save bookmark')
-    } finally {
       setSaving(false)
     }
   }

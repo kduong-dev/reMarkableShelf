@@ -48,9 +48,11 @@ export function BookDetail() {
         &larr; Library
       </Link>
       <div className="book-detail-header">
-        <div className="book-detail-cover">
-          {book.coverUrl ? <img src={book.coverUrl} alt="" /> : book.title.slice(0, 1)}
-        </div>
+        {book.coverUrl ? (
+          <img className="book-detail-cover" src={book.coverUrl} alt="" />
+        ) : (
+          <div className="book-detail-cover book-detail-cover-empty">{book.title.slice(0, 1)}</div>
+        )}
         <div>
           <h1>{book.title}</h1>
           <p className="book-detail-author">{book.author}</p>
@@ -68,7 +70,7 @@ export function BookDetail() {
               </button>
             ))}
           </div>
-          <Bookmark key={`${book.currentPage}-${book.pageCount}`} book={book} onChange={setBook} />
+          <Bookmark book={book} onSaved={() => navigate('/')} />
           <button className="danger" onClick={remove}>
             Remove from collection
           </button>

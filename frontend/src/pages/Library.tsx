@@ -49,7 +49,7 @@ export function Library() {
       <div className="toolbar">
         <input
           className="library-search"
-          placeholder="Filter your collection…"
+          placeholder="Filter by title or author…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />

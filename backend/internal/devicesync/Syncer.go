@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ansel1/merry"
 	"github.com/kduong-dev/goutil/logx"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/models"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/remarkable"
@@ -37,6 +38,11 @@ func (syncer *Syncer) SyncDevice(deviceID string) ([]models.RemarkableDocument, 
 		return nil, err
 	}
 	documents, err := syncer.remarkable.ListDocuments(device.Host)
+	if merry.Is(err, remarkable.ErrNotPaired) && device.PairedAt != nil {
+		if unpairErr := syncer.store.SetDevicePairedAt(device.ID, nil); unpairErr != nil {
+			return nil, unpairErr
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -82,10 +88,60 @@ func (syncer *Syncer) syncAllDevices() {
 		return
 	}
 	for _, device := range devices {
+		// An unpaired tablet can't be signed in to until it's paired from
+		// the Sync page, so retrying it would only log the same failure.
+		if device.PairedAt == nil {
+			continue
+		}
 		if _, err := syncer.SyncDevice(device.ID); err != nil {
 			logx.Warnf("background sync of %s (%s): %v", device.Name, device.Host, err)
 		}
 	}
+}
+
+// RegisterDeviceInput is a tablet to add, with the password used once to
+// pair it; the password is never stored.
+type RegisterDeviceInput struct {
+	Name     string
+	Host     string
+	Password string
+}
+
+// RegisterDevice pairs the tablet and, only once that works, adds it, so a
+// wrong password or address doesn't leave a device that can't sync.
+func (syncer *Syncer) RegisterDevice(input RegisterDeviceInput) (models.Device, error) {
+	input.Name, input.Host = strings.TrimSpace(input.Name), strings.TrimSpace(input.Host)
+	if input.Name == "" || input.Host == "" {
+		return models.Device{}, merry.Here(ErrDeviceDetailsRequired)
+	}
+	if input.Password == "" {
+		return models.Device{}, merry.Here(ErrPasswordRequired)
+	}
+	if err := syncer.remarkable.Pair(input.Host, input.Password); err != nil {
+		return models.Device{}, err
+	}
+	pairedAt := time.Now().UTC()
+	return syncer.store.CreateDevice(models.Device{Name: input.Name, Host: input.Host, PairedAt: &pairedAt})
+}
+
+// PairDevice pairs an existing device again, e.g. after a factory reset.
+func (syncer *Syncer) PairDevice(deviceID, password string) (models.Device, error) {
+	if password == "" {
+		return models.Device{}, merry.Here(ErrPasswordRequired)
+	}
+	device, err := syncer.store.GetDevice(deviceID)
+	if err != nil {
+		return models.Device{}, err
+	}
+	if err := syncer.remarkable.Pair(device.Host, password); err != nil {
+		return models.Device{}, err
+	}
+	pairedAt := time.Now().UTC()
+	if err := syncer.store.SetDevicePairedAt(device.ID, &pairedAt); err != nil {
+		return models.Device{}, err
+	}
+	device.PairedAt = &pairedAt
+	return device, nil
 }
 
 func (syncer *Syncer) autoLinkDocuments(deviceID string) error {

@@ -1,14 +1,11 @@
 package remarkable
 
 import (
-	"bytes"
-	"fmt"
 	"strings"
 	"time"
 
 	"github.com/ansel1/merry"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/models"
-	"golang.org/x/crypto/ssh"
 )
 
 // Record separators unlikely to appear in a document title/JSON payload.
@@ -37,34 +34,16 @@ done`
 // classified as pdf/epub/notebook per Classify, with the page each was last
 // left open on.
 func (client *SSHClient) ListDocuments(host string) ([]models.RemarkableDocument, error) {
-	addr := fmt.Sprintf("%s:%s", host, client.config.Port)
-	sshConfig := &ssh.ClientConfig{
-		User:            client.config.User,
-		Auth:            []ssh.AuthMethod{ssh.Password(client.config.Password)},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		Timeout:         10 * time.Second,
-	}
-
-	connection, err := ssh.Dial("tcp", addr, sshConfig)
+	connection, err := client.dialKey(host)
 	if err != nil {
-		return nil, dialError(err, addr)
+		return nil, err
 	}
 	defer connection.Close()
-
-	session, err := connection.NewSession()
+	output, err := run(connection, listScript)
 	if err != nil {
-		return nil, merry.Wrap(err).WithUserMessage("opening SSH session")
+		return nil, merry.Wrap(err).WithUserMessage("listing the tablet's documents")
 	}
-	defer session.Close()
-
-	var stdout, stderr bytes.Buffer
-	session.Stdout = &stdout
-	session.Stderr = &stderr
-	if err := session.Run(listScript); err != nil {
-		return nil, merry.Wrap(err).WithUserMessagef("listing documents: %s", stderr.String())
-	}
-
-	return ParseListOutput(stdout.String())
+	return ParseListOutput(output)
 }
 
 // ParseListOutput parses what listScript prints into documents, skipping
@@ -124,13 +103,4 @@ func ParseListOutput(output string) ([]models.RemarkableDocument, error) {
 	}
 
 	return docs, nil
-}
-
-// dialError tells a rejected password apart from a tablet that couldn't be
-// reached. x/crypto/ssh reports a failed login only through its message.
-func dialError(err error, addr string) error {
-	if strings.Contains(err.Error(), "unable to authenticate") {
-		return merry.WithCause(merry.Here(ErrAuthenticationFailed).WithUserMessagef("the tablet at %s rejected the SSH password; check SSH_PASSWORD", addr), err)
-	}
-	return merry.WithCause(merry.Here(ErrTabletUnreachable).WithUserMessagef("couldn't reach the tablet at %s; it may be asleep or off the network", addr), err)
 }

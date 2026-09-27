@@ -9,7 +9,11 @@ export function Sync() {
   const [books, setBooks] = useState<Book[]>([])
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [newDevice, setNewDevice] = useState({ name: '', host: '' })
+  const [newDevice, setNewDevice] = useState({ name: '', host: '', password: '' })
+  const [registering, setRegistering] = useState(false)
+  const [registerError, setRegisterError] = useState<string | null>(null)
+  const [pairPassword, setPairPassword] = useState('')
+  const [pairing, setPairing] = useState(false)
 
   useEffect(() => {
     api.listDevices().then((list) => {
@@ -25,11 +29,35 @@ export function Sync() {
 
   async function addDevice(e: React.FormEvent) {
     e.preventDefault()
-    if (!newDevice.name.trim() || !newDevice.host.trim()) return
-    const device = await api.createDevice(newDevice)
-    setDevices((prev) => [...prev, device])
-    setSelected(device.id)
-    setNewDevice({ name: '', host: '' })
+    if (!newDevice.name.trim() || !newDevice.host.trim() || !newDevice.password) return
+    setRegistering(true)
+    setRegisterError(null)
+    try {
+      const device = await api.createDevice(newDevice)
+      setDevices((prev) => [...prev, device])
+      setSelected(device.id)
+      setNewDevice({ name: '', host: '', password: '' })
+    } catch (err) {
+      setRegisterError(err instanceof Error ? err.message : 'failed to pair the tablet')
+    } finally {
+      setRegistering(false)
+    }
+  }
+
+  async function pair(e: React.FormEvent) {
+    e.preventDefault()
+    if (!selected || !pairPassword) return
+    setPairing(true)
+    setError(null)
+    try {
+      const device = await api.pairDevice(selected, pairPassword)
+      setDevices((prev) => prev.map((d) => (d.id === device.id ? device : d)))
+      setPairPassword('')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'failed to pair the tablet')
+    } finally {
+      setPairing(false)
+    }
   }
 
   async function sync() {
@@ -44,6 +72,8 @@ export function Sync() {
       )
     } catch (err) {
       setError(err instanceof Error ? err.message : 'sync failed')
+      // A rejected key unpairs the device, so pick up its new state.
+      api.listDevices().then(setDevices)
     } finally {
       setSyncing(false)
     }
@@ -62,6 +92,7 @@ export function Sync() {
     setDocs((prev) => prev.map((d) => (d.uuid === doc.uuid ? { ...d, linkedBookId: bookId } : d)))
   }
 
+  const selectedDevice = devices.find((d) => d.id === selected)
   const bookDocs = docs.filter((d) => d.fileType !== 'notebook')
   const noteDocs = docs.filter((d) => d.fileType === 'notebook')
 
@@ -80,10 +111,22 @@ export function Sync() {
           value={newDevice.host}
           onChange={(e) => setNewDevice((d) => ({ ...d, host: e.target.value }))}
         />
-        <button type="submit" className="primary">
-          Register device
+        <input
+          type="password"
+          autoComplete="off"
+          placeholder="Tablet password"
+          value={newDevice.password}
+          onChange={(e) => setNewDevice((d) => ({ ...d, password: e.target.value }))}
+        />
+        <button type="submit" className="primary" disabled={registering}>
+          {registering ? 'Pairing…' : 'Pair device'}
         </button>
+        <p className="device-form-hint">
+          The password is under Settings → Help → Copyrights and licenses on the tablet. It's used
+          once to install this server's key, then discarded.
+        </p>
       </form>
+      {registerError && <p className="error">{registerError}</p>}
 
       {devices.length === 0 && (
         <p className="empty-state">
@@ -101,7 +144,7 @@ export function Sync() {
               </option>
             ))}
           </select>
-          <button className="primary" onClick={sync} disabled={syncing}>
+          <button className="primary" onClick={sync} disabled={syncing || !selectedDevice?.pairedAt}>
             {syncing ? 'Syncing…' : 'Sync now'}
           </button>
           {devices.find((d) => d.id === selected)?.lastSyncedAt && (
@@ -110,6 +153,25 @@ export function Sync() {
             </span>
           )}
         </div>
+      )}
+
+      {selectedDevice && !selectedDevice.pairedAt && (
+        <form className="pair-form" onSubmit={pair}>
+          <p>
+            <strong>{selectedDevice.name}</strong> isn't paired with this server, so it can't sync.
+            Enter the tablet's password to pair it.
+          </p>
+          <input
+            type="password"
+            autoComplete="off"
+            placeholder="Tablet password"
+            value={pairPassword}
+            onChange={(e) => setPairPassword(e.target.value)}
+          />
+          <button type="submit" className="primary" disabled={pairing || !pairPassword}>
+            {pairing ? 'Pairing…' : 'Pair'}
+          </button>
+        </form>
       )}
 
       {error && <p className="error">{error}</p>}

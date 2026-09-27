@@ -8,4 +8,5 @@ type Device struct {
 	Name         string     `json:"name"`
 	Host         string     `json:"host"`
 	LastSyncedAt *time.Time `json:"lastSyncedAt,omitempty"`
+	PairedAt     *time.Time `json:"pairedAt,omitempty"`
 }

@@ -24,6 +24,7 @@ export interface Device {
   name: string
   host: string
   lastSyncedAt?: string
+  pairedAt?: string
 }
 
 export type RemarkableFileType = 'pdf' | 'epub' | 'notebook'

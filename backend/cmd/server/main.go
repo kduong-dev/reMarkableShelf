@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"net/http"
+	"path/filepath"
 	"time"
 
 	"github.com/kduong-dev/goutil/config"
@@ -23,10 +24,15 @@ func main() {
 	fatal.OnError(err, "opening database: ")
 	defer db.Close()
 
+	// The server's key signs in to every paired tablet, so it lives beside
+	// the database on persistent storage unless SSH_KEY_PATH says otherwise.
+	keyPath := config.EnvString("SSH_KEY_PATH", filepath.Join(filepath.Dir(dbPath), "remarkable-shelf_ed25519"))
+	signer, err := remarkable.LoadOrCreateSigner(keyPath)
+	fatal.OnError(err, "loading SSH key: ")
 	syncer := devicesync.NewSyncer(db, remarkable.NewSSHClient(remarkable.Config{
-		User:     config.EnvString("SSH_USER", "root"),
-		Password: config.EnvString("SSH_PASSWORD", ""),
-		Port:     config.EnvString("SSH_PORT", "22"),
+		User:   config.EnvString("SSH_USER", "root"),
+		Port:   config.EnvString("SSH_PORT", "22"),
+		Signer: signer,
 	}))
 	// A zero SYNC_INTERVAL turns background sync off, leaving only Sync now.
 	syncInterval := config.EnvDuration("SYNC_INTERVAL", 5*time.Minute)

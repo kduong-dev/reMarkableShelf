@@ -38,8 +38,11 @@ export const api = {
   },
 
   listDevices: () => requestList<Device>('/devices'),
-  createDevice: (device: Partial<Device>) =>
+  // The password pairs the tablet with the server's key; it isn't stored.
+  createDevice: (device: { name: string; host: string; password: string }) =>
     request<Device>('/devices', { method: 'POST', body: JSON.stringify(device) }),
+  pairDevice: (id: string, password: string) =>
+    request<Device>(`/devices/${id}/pair`, { method: 'POST', body: JSON.stringify({ password }) }),
   syncDevice: (id: string) => requestList<RemarkableDocument>(`/devices/${id}/sync`, { method: 'POST' }),
   listDocuments: (deviceId: string) => requestList<RemarkableDocument>(`/devices/${deviceId}/documents`),
   linkDocument: (deviceId: string, uuid: string, bookId: string) =>

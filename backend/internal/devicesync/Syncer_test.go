@@ -5,20 +5,34 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ansel1/merry"
 	. "github.com/smartystreets/goconvey/convey"
 
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/devicesync"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/models"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/remarkable"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/store"
 )
 
-// fakeTablet serves whatever documents the test has put on it.
+// fakeTablet serves whatever documents the test has put on it, failing
+// with listErr or pairErr when set.
 type fakeTablet struct {
-	documents []models.RemarkableDocument
+	documents  []models.RemarkableDocument
+	listErr    error
+	pairErr    error
+	pairedWith string
 }
 
 func (tablet *fakeTablet) ListDocuments(host string) ([]models.RemarkableDocument, error) {
-	return tablet.documents, nil
+	return tablet.documents, tablet.listErr
+}
+
+func (tablet *fakeTablet) Pair(host, password string) error {
+	if tablet.pairErr != nil {
+		return tablet.pairErr
+	}
+	tablet.pairedWith = password
+	return nil
 }
 
 func pages(count int) *int {
@@ -130,6 +144,79 @@ func TestSyncDevice(t *testing.T) {
 			Convey("Then the book is left as it was", func() {
 				So(book.CurrentPage, ShouldBeNil)
 				So(book.Status, ShouldEqual, models.StatusWantToRead)
+			})
+		})
+	})
+}
+
+func TestPairing(t *testing.T) {
+	Convey("Given a syncer with no devices", t, func() {
+		opened, err := store.Open(filepath.Join(t.TempDir(), "books.db"))
+		So(err, ShouldBeNil)
+		Reset(func() { _ = opened.Close() })
+		tablet := &fakeTablet{}
+		syncer := devicesync.NewSyncer(opened, tablet)
+		register := func() (models.Device, error) {
+			return syncer.RegisterDevice(devicesync.RegisterDeviceInput{Name: " Paper Pro ", Host: "10.0.0.5", Password: "secret"})
+		}
+		Convey("When registering a tablet with its password", func() {
+			device, err := register()
+			Convey("Then it pairs with the password and saves the device as paired", func() {
+				So(err, ShouldBeNil)
+				So(tablet.pairedWith, ShouldEqual, "secret")
+				So(device.Name, ShouldEqual, "Paper Pro")
+				stored, err := opened.GetDevice(device.ID)
+				So(err, ShouldBeNil)
+				So(stored.PairedAt, ShouldNotBeNil)
+			})
+			Convey("And the tablet later rejects the server's key", func() {
+				tablet.listErr = merry.Here(remarkable.ErrNotPaired)
+				_, err := syncer.SyncDevice(device.ID)
+				Convey("Then the sync fails and the device is marked unpaired", func() {
+					So(merry.Is(err, remarkable.ErrNotPaired), ShouldBeTrue)
+					stored, err := opened.GetDevice(device.ID)
+					So(err, ShouldBeNil)
+					So(stored.PairedAt, ShouldBeNil)
+				})
+				Convey("Then pairing it again marks it paired", func() {
+					tablet.listErr = nil
+					repaired, err := syncer.PairDevice(device.ID, "secret")
+					So(err, ShouldBeNil)
+					So(repaired.PairedAt, ShouldNotBeNil)
+				})
+			})
+			Convey("And the tablet is just asleep", func() {
+				tablet.listErr = merry.Here(remarkable.ErrTabletUnreachable)
+				_, err := syncer.SyncDevice(device.ID)
+				Convey("Then the device stays paired", func() {
+					So(merry.Is(err, remarkable.ErrTabletUnreachable), ShouldBeTrue)
+					stored, err := opened.GetDevice(device.ID)
+					So(err, ShouldBeNil)
+					So(stored.PairedAt, ShouldNotBeNil)
+				})
+			})
+		})
+		Convey("When registering with a password the tablet rejects", func() {
+			tablet.pairErr = merry.Here(remarkable.ErrWrongPassword)
+			_, err := register()
+			Convey("Then it returns ErrWrongPassword and saves no device", func() {
+				So(merry.Is(err, remarkable.ErrWrongPassword), ShouldBeTrue)
+				devices, err := opened.ListDevices()
+				So(err, ShouldBeNil)
+				So(devices, ShouldBeEmpty)
+			})
+		})
+		Convey("When registering without a password", func() {
+			_, err := syncer.RegisterDevice(devicesync.RegisterDeviceInput{Name: "Paper Pro", Host: "10.0.0.5"})
+			Convey("Then it returns ErrPasswordRequired without contacting the tablet", func() {
+				So(merry.Is(err, devicesync.ErrPasswordRequired), ShouldBeTrue)
+				So(tablet.pairedWith, ShouldBeEmpty)
+			})
+		})
+		Convey("When registering without a host", func() {
+			_, err := syncer.RegisterDevice(devicesync.RegisterDeviceInput{Name: "Paper Pro", Password: "secret"})
+			Convey("Then it returns ErrDeviceDetailsRequired", func() {
+				So(merry.Is(err, devicesync.ErrDeviceDetailsRequired), ShouldBeTrue)
 			})
 		})
 	})

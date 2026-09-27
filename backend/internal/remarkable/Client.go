@@ -1,28 +1,24 @@
 package remarkable
 
-import "github.com/kduong-dev/reMarkableShelf/backend/internal/models"
+import (
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/models"
+	"golang.org/x/crypto/ssh"
+)
 
-// Config holds the SSH credentials used to reach a tablet. In practice a
-// user has one (or a couple) of personal tablets, so — per the setup notes
-// in the repo README — these are provided once via env vars rather than
-// stored per-Device in the database.
+// Config is how the server signs in to tablets: as User on Port, with
+// Signer, its own key, which pairing installs on each tablet.
 type Config struct {
-	User     string
-	Password string
-	Port     string
+	User   string
+	Port   string
+	Signer ssh.Signer
 }
 
-// API is the front interface sync depends on to read a tablet's documents,
-// so it can be substituted with a fake in tests.
+// API is the front interface sync depends on to reach tablets, so it can be
+// substituted with a fake in tests.
 type API interface {
+	// ListDocuments reads every document on the tablet at host.
 	ListDocuments(host string) ([]models.RemarkableDocument, error)
-}
-
-// SSHClient reads documents straight from a tablet's filesystem over SSH.
-type SSHClient struct {
-	config Config
-}
-
-func NewSSHClient(config Config) *SSHClient {
-	return &SSHClient{config: config}
+	// Pair signs in to the tablet at host with its password, once, to
+	// install the server's key, and checks the key then works.
+	Pair(host, password string) error
 }

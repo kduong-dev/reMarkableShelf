@@ -41,7 +41,9 @@ export function Library() {
     <section>
       <div className="page-header">
         <h1>Library</h1>
-        <button onClick={() => setShowAdd(true)}>+ Add book</button>
+        <button className="primary" onClick={() => setShowAdd(true)}>
+          Add book
+        </button>
       </div>
 
       <div className="toolbar">

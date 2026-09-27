@@ -64,7 +64,7 @@ export function SearchModal({
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search by title, author, or ISBN"
           />
-          <button type="submit" disabled={loading}>
+          <button type="submit" className="primary" disabled={loading}>
             {loading ? 'Searching…' : 'Search'}
           </button>
         </form>

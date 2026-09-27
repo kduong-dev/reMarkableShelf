@@ -80,7 +80,9 @@ export function Sync() {
           value={newDevice.host}
           onChange={(e) => setNewDevice((d) => ({ ...d, host: e.target.value }))}
         />
-        <button type="submit">Register device</button>
+        <button type="submit" className="primary">
+          Register device
+        </button>
       </form>
 
       {devices.length === 0 && (
@@ -99,7 +101,7 @@ export function Sync() {
               </option>
             ))}
           </select>
-          <button onClick={sync} disabled={syncing}>
+          <button className="primary" onClick={sync} disabled={syncing}>
             {syncing ? 'Syncing…' : 'Sync now'}
           </button>
           {devices.find((d) => d.id === selected)?.lastSyncedAt && (

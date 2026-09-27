@@ -2,6 +2,7 @@ package openlibrary
 
 import (
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -14,12 +15,14 @@ type searchResponse struct {
 }
 
 type workDocument struct {
-	Key        string   `json:"key"`
-	Title      string   `json:"title"`
-	AuthorName []string `json:"author_name"`
-	ISBN       []string `json:"isbn"`
-	CoverID    int      `json:"cover_i"`
-	PageCount  int      `json:"number_of_pages_median"`
+	Key              string   `json:"key"`
+	Title            string   `json:"title"`
+	AuthorName       []string `json:"author_name"`
+	ISBN             []string `json:"isbn"`
+	CoverID          int      `json:"cover_i"`
+	PageCount        int      `json:"number_of_pages_median"`
+	FirstPublishYear int      `json:"first_publish_year"`
+	RatingsAverage   float64  `json:"ratings_average"`
 }
 
 // toResult picks the fields the frontend needs out of a work. A work lists
@@ -44,11 +47,13 @@ func (document workDocument) toResult() Result {
 		coverURL = fmt.Sprintf(coverURLFormat, document.CoverID)
 	}
 	return Result{
-		OpenLibraryID: strings.TrimPrefix(document.Key, "/works/"),
-		Title:         document.Title,
-		Author:        author,
-		ISBN:          isbn,
-		CoverURL:      coverURL,
-		PageCount:     document.PageCount,
+		OpenLibraryID:    strings.TrimPrefix(document.Key, "/works/"),
+		Title:            document.Title,
+		Author:           author,
+		ISBN:             isbn,
+		CoverURL:         coverURL,
+		PageCount:        document.PageCount,
+		FirstPublishYear: document.FirstPublishYear,
+		AverageRating:    math.Round(document.RatingsAverage*10) / 10,
 	}
 }

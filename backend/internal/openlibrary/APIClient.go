@@ -6,7 +6,6 @@ import (
 	"net/url"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/ansel1/merry"
 	"github.com/kduong-dev/goutil/fatal"
@@ -54,16 +53,13 @@ var editionSentinels = map[int]error{
 	http.StatusNotFound: ErrEditionNotFound,
 }
 
-func (api *APIClient) Search(query string) ([]Result, error) {
-	query = strings.TrimSpace(query)
-	if query == "" {
-		return nil, ErrEmptyQuery
-	}
-	if utf8.RuneCountInString(query) < MinimumQueryLength {
-		return nil, merry.Here(ErrQueryTooShort)
+func (api *APIClient) Search(input SearchInput) ([]Result, error) {
+	input.Query = strings.TrimSpace(input.Query)
+	if err := input.validate(); err != nil {
+		return nil, err
 	}
 	var parsed searchResponse
-	if err := api.getJSON(api.createSearchURL(query), searchSentinels, &parsed); err != nil {
+	if err := api.getJSON(api.createSearchURL(input), searchSentinels, &parsed); err != nil {
 		return nil, err
 	}
 	results := make([]Result, 0, len(parsed.Docs))
@@ -86,11 +82,14 @@ func (api *APIClient) EditionPageCount(isbn string) (int, error) {
 	return parsed.PageCount, nil
 }
 
-func (api *APIClient) createSearchURL(query string) string {
+func (api *APIClient) createSearchURL(input SearchInput) string {
 	values := make(url.Values)
-	values.Set("q", query)
+	values.Set("q", input.searchQuery())
+	if input.Sort != SortRelevance {
+		values.Set("sort", string(input.Sort))
+	}
 	values.Set("limit", "20")
-	values.Set("fields", "key,title,author_name,isbn,cover_i,number_of_pages_median")
+	values.Set("fields", "key,title,author_name,isbn,cover_i,number_of_pages_median,first_publish_year,ratings_average")
 	return api.baseURL + "/search.json?" + values.Encode()
 }
 

@@ -18,11 +18,15 @@ import (
 )
 
 type fakeOpenLibrary struct {
-	pageCount int
-	err       error
+	pageCount   int
+	err         error
+	searchInput *openlibrary.SearchInput
 }
 
-func (fake fakeOpenLibrary) Search(query string) ([]openlibrary.Result, error) {
+func (fake fakeOpenLibrary) Search(input openlibrary.SearchInput) ([]openlibrary.Result, error) {
+	if fake.searchInput != nil {
+		*fake.searchInput = input
+	}
 	return nil, nil
 }
 

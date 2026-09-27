@@ -82,6 +82,7 @@ export function Library() {
 
       {showAdd && (
         <SearchModal
+          shelf={books}
           onClose={() => setShowAdd(false)}
           onAdded={(book) => {
             setBooks((prev) => [book, ...prev])

@@ -1,4 +1,4 @@
-import type { Book, BookSearchResult, Device, RemarkableDocument } from './types'
+import type { Book, BookSearch, BookSearchResult, Device, RemarkableDocument } from './types'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, {
@@ -29,7 +29,13 @@ export const api = {
     request<Book>(`/books/${id}`, { method: 'PUT', body: JSON.stringify(patch) }),
   deleteBook: (id: string) => request<void>(`/books/${id}`, { method: 'DELETE' }),
 
-  searchBooks: (q: string) => requestList<BookSearchResult>(`/search/books?q=${encodeURIComponent(q)}`),
+  searchBooks: (search: BookSearch, signal?: AbortSignal) => {
+    const params = new URLSearchParams()
+    for (const [key, value] of Object.entries(search)) {
+      if (value !== undefined && value !== '') params.set(key, String(value))
+    }
+    return requestList<BookSearchResult>(`/search/books?${params}`, { signal })
+  },
 
   listDevices: () => requestList<Device>('/devices'),
   createDevice: (device: Partial<Device>) =>

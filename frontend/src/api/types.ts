@@ -42,4 +42,16 @@ export interface BookSearchResult {
   isbn?: string
   coverUrl?: string
   pageCount?: number
+  firstPublishYear?: number
+  averageRating?: number
+}
+
+export type SearchSort = '' | 'rating' | 'new' | 'old'
+
+export interface BookSearch {
+  q: string
+  sort?: SearchSort
+  language?: string
+  publishedFrom?: number
+  publishedTo?: number
 }

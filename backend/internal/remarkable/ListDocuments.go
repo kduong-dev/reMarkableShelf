@@ -47,7 +47,7 @@ func (client *SSHClient) ListDocuments(host string) ([]models.RemarkableDocument
 
 	connection, err := ssh.Dial("tcp", addr, sshConfig)
 	if err != nil {
-		return nil, merry.Wrap(err).WithUserMessagef("connecting to tablet at %s", addr)
+		return nil, dialError(err, addr)
 	}
 	defer connection.Close()
 
@@ -124,4 +124,13 @@ func ParseListOutput(output string) ([]models.RemarkableDocument, error) {
 	}
 
 	return docs, nil
+}
+
+// dialError tells a rejected password apart from a tablet that couldn't be
+// reached. x/crypto/ssh reports a failed login only through its message.
+func dialError(err error, addr string) error {
+	if strings.Contains(err.Error(), "unable to authenticate") {
+		return merry.WithCause(merry.Here(ErrAuthenticationFailed).WithUserMessagef("the tablet at %s rejected the SSH password; check SSH_PASSWORD", addr), err)
+	}
+	return merry.WithCause(merry.Here(ErrTabletUnreachable).WithUserMessagef("couldn't reach the tablet at %s; it may be asleep or off the network", addr), err)
 }

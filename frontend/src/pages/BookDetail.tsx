@@ -70,7 +70,12 @@ export function BookDetail() {
               </button>
             ))}
           </div>
-          <Bookmark book={book} onSaved={() => navigate('/')} />
+          {/* Keyed on the bookmark so its inputs reset when a status change moves it. */}
+          <Bookmark
+            key={`${book.currentPage}-${book.pageCount}`}
+            book={book}
+            onSaved={() => navigate('/')}
+          />
           <button className="danger" onClick={remove}>
             Remove from collection
           </button>

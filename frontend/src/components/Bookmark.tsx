@@ -19,14 +19,14 @@ export function Bookmark({ book, onSaved }: { book: Book; onSaved: () => void })
   const [error, setError] = useState<string | null>(null)
 
   const percent = progressPercent(book)
-  const pageNumber = Number(page)
+  // An empty page box leaves the bookmark as it is, so Save still works on a
+  // book that was marked Finished without ever being bookmarked.
+  const pageNumber = page ? Number(page) : undefined
   const totalNumber = total ? Number(total) : undefined
-  const unchanged = page === String(book.currentPage ?? '') && total === String(book.pageCount ?? '')
   const invalid =
-    page === '' ||
-    !Number.isInteger(pageNumber) ||
-    pageNumber < 0 ||
-    (totalNumber !== undefined && (!Number.isInteger(totalNumber) || totalNumber < 1 || pageNumber > totalNumber))
+    (pageNumber !== undefined && (!Number.isInteger(pageNumber) || pageNumber < 0)) ||
+    (totalNumber !== undefined && (!Number.isInteger(totalNumber) || totalNumber < 1)) ||
+    (pageNumber !== undefined && totalNumber !== undefined && pageNumber > totalNumber)
 
   async function save(e: React.FormEvent) {
     e.preventDefault()
@@ -37,7 +37,7 @@ export function Bookmark({ book, onSaved }: { book: Book; onSaved: () => void })
       await api.updateBook(book.id, {
         currentPage: pageNumber,
         pageCount: totalNumber,
-        status: statusForPage(book, pageNumber, totalNumber),
+        status: pageNumber === undefined ? book.status : statusForPage(book, pageNumber, totalNumber),
       })
       onSaved()
     } catch (err) {
@@ -85,7 +85,7 @@ export function Bookmark({ book, onSaved }: { book: Book; onSaved: () => void })
             onChange={(e) => setTotal(e.target.value)}
           />
         </label>
-        <button type="submit" className="primary" disabled={saving || invalid || unchanged}>
+        <button type="submit" className="primary" disabled={saving || invalid}>
           {saving ? 'Saving…' : 'Save'}
         </button>
       </form>

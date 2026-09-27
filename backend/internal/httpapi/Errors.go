@@ -6,4 +6,4 @@ import (
 	"github.com/ansel1/merry"
 )
 
-var ErrInvalidYear = merry.New("invalid year").WithHTTPCode(http.StatusBadRequest)
+var ErrInvalidNumber = merry.New("invalid number").WithHTTPCode(http.StatusBadRequest)

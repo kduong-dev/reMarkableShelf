@@ -18,20 +18,26 @@ func (api *API) SearchBooks(responseWriter http.ResponseWriter, request *http.Re
 		}
 	}()
 	values := request.URL.Query()
-	publishedFrom, err := optionalYear(values, "publishedFrom")
+	publishedFrom, err := optionalNumber(values, "publishedFrom")
 	if err != nil {
 		return
 	}
-	publishedTo, err := optionalYear(values, "publishedTo")
+	publishedTo, err := optionalNumber(values, "publishedTo")
+	if err != nil {
+		return
+	}
+	page, err := optionalNumber(values, "page")
 	if err != nil {
 		return
 	}
 	results, err := api.openLibrary.Search(openlibrary.SearchInput{
 		Query:         values.Get("q"),
+		Subject:       values.Get("subject"),
 		Sort:          openlibrary.Sort(values.Get("sort")),
 		Language:      values.Get("language"),
 		PublishedFrom: publishedFrom,
 		PublishedTo:   publishedTo,
+		Page:          page,
 	})
 	if err != nil {
 		return
@@ -39,15 +45,16 @@ func (api *API) SearchBooks(responseWriter http.ResponseWriter, request *http.Re
 	httpx.SendJSONResponse(responseWriter, http.StatusOK, results)
 }
 
-// optionalYear parses the year in query parameter key, or 0 when it's absent.
-func optionalYear(values url.Values, key string) (int, error) {
+// optionalNumber parses the whole number in query parameter key, or 0 when
+// it's absent.
+func optionalNumber(values url.Values, key string) (int, error) {
 	raw := values.Get(key)
 	if raw == "" {
 		return 0, nil
 	}
 	year, err := strconv.Atoi(raw)
 	if err != nil {
-		return 0, merry.Here(ErrInvalidYear).WithUserMessagef("%s must be a year", key)
+		return 0, merry.Here(ErrInvalidNumber).WithUserMessagef("%s must be a whole number", key)
 	}
 	return year, nil
 }

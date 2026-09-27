@@ -2,6 +2,7 @@ package openlibrary
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -19,6 +20,8 @@ const (
 	userAgent = "reMarkableShelf (+https://github.com/kduong-dev/reMarkableShelf)"
 	// MinimumQueryLength is the shortest query Open Library's search accepts.
 	MinimumQueryLength = 3
+	// PageSize is how many results each page of a search holds.
+	PageSize = 20
 )
 
 type APIClient struct {
@@ -53,20 +56,20 @@ var editionSentinels = map[int]error{
 	http.StatusNotFound: ErrEditionNotFound,
 }
 
-func (api *APIClient) Search(input SearchInput) ([]Result, error) {
+func (api *APIClient) Search(input SearchInput) (SearchResults, error) {
 	input.Query = strings.TrimSpace(input.Query)
 	if err := input.validate(); err != nil {
-		return nil, err
+		return SearchResults{}, err
 	}
 	var parsed searchResponse
 	if err := api.getJSON(api.createSearchURL(input), searchSentinels, &parsed); err != nil {
-		return nil, err
+		return SearchResults{}, err
 	}
 	results := make([]Result, 0, len(parsed.Docs))
 	for _, document := range parsed.Docs {
 		results = append(results, document.toResult())
 	}
-	return results, nil
+	return SearchResults{Results: results, Total: parsed.NumFound}, nil
 }
 
 func (api *APIClient) EditionPageCount(isbn string) (int, error) {
@@ -88,7 +91,10 @@ func (api *APIClient) createSearchURL(input SearchInput) string {
 	if input.Sort != SortRelevance {
 		values.Set("sort", string(input.Sort))
 	}
-	values.Set("limit", "20")
+	values.Set("limit", fmt.Sprint(PageSize))
+	if input.Page > 1 {
+		values.Set("page", fmt.Sprint(input.Page))
+	}
 	values.Set("fields", "key,title,author_name,isbn,cover_i,number_of_pages_median,first_publish_year,ratings_average")
 	return api.baseURL + "/search.json?" + values.Encode()
 }

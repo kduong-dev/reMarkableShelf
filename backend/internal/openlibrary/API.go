@@ -5,10 +5,17 @@ package openlibrary
 // is typed as API rather than *APIClient so it can be substituted with a fake
 // in handler tests.
 type API interface {
-	Search(input SearchInput) ([]Result, error)
+	Search(input SearchInput) (SearchResults, error)
 	// EditionPageCount returns the page count of the edition with the given
 	// ISBN, or 0 when Open Library doesn't record one.
 	EditionPageCount(isbn string) (int, error)
+}
+
+// SearchResults is one page of a search. Total counts every match, so the
+// caller can tell whether more pages remain.
+type SearchResults struct {
+	Results []Result `json:"results"`
+	Total   int      `json:"total"`
 }
 
 // Result is the subset of an Open Library work surfaced to the frontend

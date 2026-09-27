@@ -11,7 +11,8 @@ const coverURLFormat = "https://covers.openlibrary.org/b/id/%d-M.jpg"
 // searchResponse mirrors the subset of the Open Library search response
 // (https://openlibrary.org/dev/docs/api/search) needed to build a Result.
 type searchResponse struct {
-	Docs []workDocument `json:"docs"`
+	NumFound int            `json:"numFound"`
+	Docs     []workDocument `json:"docs"`
 }
 
 type workDocument struct {

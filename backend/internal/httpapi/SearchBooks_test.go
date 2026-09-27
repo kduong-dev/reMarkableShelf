@@ -29,15 +29,17 @@ func TestSearchBooks(t *testing.T) {
 			return recorder
 		}
 		Convey("When searching with filters", func() {
-			recorder := search("q=le+guin&sort=rating&language=eng&publishedFrom=1960&publishedTo=1979")
+			recorder := search("q=le+guin&subject=fantasy&sort=rating&language=eng&publishedFrom=1960&publishedTo=1979&page=2")
 			Convey("Then they are passed to Open Library", func() {
 				So(recorder.Code, ShouldEqual, http.StatusOK)
 				So(searchInput, ShouldResemble, openlibrary.SearchInput{
 					Query:         "le guin",
+					Subject:       "fantasy",
 					Sort:          openlibrary.SortRating,
 					Language:      "eng",
 					PublishedFrom: 1960,
 					PublishedTo:   1979,
+					Page:          2,
 				})
 			})
 		})
@@ -45,7 +47,7 @@ func TestSearchBooks(t *testing.T) {
 			recorder := search("q=le+guin&publishedFrom=sixties")
 			Convey("Then it responds 400 naming the parameter", func() {
 				So(recorder.Code, ShouldEqual, http.StatusBadRequest)
-				So(recorder.Body.String(), ShouldContainSubstring, "publishedFrom must be a year")
+				So(recorder.Body.String(), ShouldContainSubstring, "publishedFrom must be a whole number")
 			})
 		})
 	})

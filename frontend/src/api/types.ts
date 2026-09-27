@@ -46,10 +46,17 @@ export interface BookSearchResult {
   averageRating?: number
 }
 
+export interface BookSearchResults {
+  results: BookSearchResult[]
+  total: number
+}
+
 export type SearchSort = '' | 'rating' | 'new' | 'old'
 
 export interface BookSearch {
-  q: string
+  q?: string
+  subject?: string
+  page?: number
   sort?: SearchSort
   language?: string
   publishedFrom?: number

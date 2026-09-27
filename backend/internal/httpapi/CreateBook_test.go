@@ -23,11 +23,11 @@ type fakeOpenLibrary struct {
 	searchInput *openlibrary.SearchInput
 }
 
-func (fake fakeOpenLibrary) Search(input openlibrary.SearchInput) ([]openlibrary.Result, error) {
+func (fake fakeOpenLibrary) Search(input openlibrary.SearchInput) (openlibrary.SearchResults, error) {
 	if fake.searchInput != nil {
 		*fake.searchInput = input
 	}
-	return nil, nil
+	return openlibrary.SearchResults{}, nil
 }
 
 func (fake fakeOpenLibrary) EditionPageCount(isbn string) (int, error) {

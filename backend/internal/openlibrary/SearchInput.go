@@ -20,25 +20,40 @@ const (
 	SortOldest    Sort = "old"
 )
 
-var languagePattern = regexp.MustCompile(`^[a-z]{3}$`)
+var (
+	languagePattern = regexp.MustCompile(`^[a-z]{3}$`)
+	// subjectPattern keeps a subject to the words of a genre name, so it
+	// can't close its quotes and add clauses of its own.
+	subjectPattern = regexp.MustCompile(`^[a-z0-9' -]{2,40}$`)
+)
 
-// SearchInput is a search query plus the filters that narrow it. Language is
-// a MARC language code such as "eng", and a zero PublishedFrom or
-// PublishedTo leaves that end of the first-published range open.
+// SearchInput is a search query plus the filters that narrow it. Either
+// Query or Subject is required, so a genre can be browsed without a query.
+// Language is a MARC language code such as "eng", a zero PublishedFrom or
+// PublishedTo leaves that end of the first-published range open, and Page
+// counts from 1, with 0 meaning the first page.
 type SearchInput struct {
 	Query         string
+	Subject       string
 	Sort          Sort
 	Language      string
 	PublishedFrom int
 	PublishedTo   int
+	Page          int
 }
 
 func (input SearchInput) validate() error {
-	if input.Query == "" {
+	if input.Query == "" && input.Subject == "" {
 		return ErrEmptyQuery
 	}
-	if utf8.RuneCountInString(input.Query) < MinimumQueryLength {
+	if input.Query != "" && utf8.RuneCountInString(input.Query) < MinimumQueryLength {
 		return merry.Here(ErrQueryTooShort)
+	}
+	if input.Subject != "" && !subjectPattern.MatchString(input.Subject) {
+		return merry.Here(ErrInvalidSubject).WithMessagef("invalid subject %q", input.Subject)
+	}
+	if input.Page < 0 {
+		return merry.Here(ErrInvalidPage).WithMessagef("invalid page %d", input.Page)
 	}
 	switch input.Sort {
 	case SortRelevance, SortRating, SortNewest, SortOldest:
@@ -56,9 +71,15 @@ func (input SearchInput) validate() error {
 }
 
 // searchQuery appends the filters to the user's query as Open Library's
-// fielded search clauses, e.g. `le guin language:eng first_publish_year:[1960 TO 1979]`.
+// fielded search clauses, e.g. `le guin subject:"fantasy" language:eng first_publish_year:[1960 TO 1979]`.
 func (input SearchInput) searchQuery() string {
-	clauses := []string{input.Query}
+	var clauses []string
+	if input.Query != "" {
+		clauses = append(clauses, input.Query)
+	}
+	if input.Subject != "" {
+		clauses = append(clauses, fmt.Sprintf("subject:%q", input.Subject))
+	}
 	if input.Language != "" {
 		clauses = append(clauses, "language:"+input.Language)
 	}

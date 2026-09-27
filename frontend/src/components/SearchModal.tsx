@@ -1,13 +1,33 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
-import type { Book, BookSearchResult, SearchSort } from '../api/types'
+import type { Book, BookSearch, BookSearchResult, SearchSort } from '../api/types'
 
 // Open Library's search refuses anything shorter.
 const minimumQueryLength = 3
+// Matches the Open Library client's page size on the server.
+const pageSize = 20
 // How long typing has to pause before searching, so each keystroke doesn't
 // send a request.
 const searchDelayMs = 350
+
+// Open Library subjects to browse by; each is searched as subject:"<value>".
+const genres: Array<{ label: string; value: string }> = [
+  { label: 'Fantasy', value: 'fantasy' },
+  { label: 'Science fiction', value: 'science fiction' },
+  { label: 'Mystery', value: 'mystery' },
+  { label: 'Thriller', value: 'thriller' },
+  { label: 'Romance', value: 'romance' },
+  { label: 'Horror', value: 'horror' },
+  { label: 'Classics', value: 'classics' },
+  { label: 'Young adult', value: 'young adult fiction' },
+  { label: 'Graphic novels', value: 'graphic novels' },
+  { label: 'Poetry', value: 'poetry' },
+  { label: 'History', value: 'history' },
+  { label: 'Biography', value: 'biography' },
+  { label: 'Philosophy', value: 'philosophy' },
+  { label: 'Self-help', value: 'self-help' },
+]
 
 const sorts: Array<{ label: string; value: SearchSort }> = [
   { label: 'Relevance', value: '' },
@@ -60,17 +80,31 @@ export function SearchModal({
   onAdded: (book: Book) => void
 }) {
   const [query, setQuery] = useState('')
+  const [genre, setGenre] = useState('')
   const [sort, setSort] = useState<SearchSort>('')
   const [language, setLanguage] = useState('')
   const [eraIndex, setEraIndex] = useState(0)
   const [results, setResults] = useState<BookSearchResult[]>([])
-  const [searchedFor, setSearchedFor] = useState('')
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const [searched, setSearched] = useState<BookSearch | null>(null)
   const [loading, setLoading] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [addingId, setAddingId] = useState<string | null>(null)
+  // Aborts an in-flight "Load more" when the search it extends changes.
+  const loadMoreController = useRef<AbortController | null>(null)
 
   const trimmed = query.trim()
   const era = eras[eraIndex]
+  // A genre can be browsed with no query, but a query has to be long enough
+  // for Open Library either way.
+  const tooShort = trimmed.length > 0 && trimmed.length < minimumQueryLength
+  const canSearch = !tooShort && (trimmed !== '' || genre !== '')
+  const search = useMemo<BookSearch>(
+    () => ({ q: trimmed, subject: genre, sort, language, publishedFrom: era.from, publishedTo: era.to }),
+    [trimmed, genre, sort, language, era],
+  )
 
   // Maps a result to the book already on the shelf, by Open Library work or
   // by ISBN, so it can't be added twice.
@@ -85,18 +119,17 @@ export function SearchModal({
   }, [shelf])
 
   useEffect(() => {
-    if (trimmed.length < minimumQueryLength) return
+    if (!canSearch) return
     const controller = new AbortController()
     const timer = setTimeout(async () => {
       setLoading(true)
       setError(null)
       try {
-        const found = await api.searchBooks(
-          { q: trimmed, sort, language, publishedFrom: era.from, publishedTo: era.to },
-          controller.signal,
-        )
-        setResults(found)
-        setSearchedFor(trimmed)
+        const found = await api.searchBooks(search, controller.signal)
+        setResults(found.results)
+        setTotal(found.total)
+        setPage(1)
+        setSearched(search)
       } catch (err) {
         if (controller.signal.aborted) return
         setError(err instanceof Error ? err.message : 'search failed')
@@ -107,8 +140,33 @@ export function SearchModal({
     return () => {
       clearTimeout(timer)
       controller.abort()
+      loadMoreController.current?.abort()
+      setLoadingMore(false)
     }
-  }, [trimmed, sort, language, era])
+  }, [canSearch, search])
+
+  async function loadMore() {
+    if (!searched) return
+    const controller = new AbortController()
+    loadMoreController.current = controller
+    setLoadingMore(true)
+    setError(null)
+    try {
+      const found = await api.searchBooks({ ...searched, page: page + 1 }, controller.signal)
+      // Open Library can repeat a work across pages, so skip ones already shown.
+      setResults((shown) => {
+        const seen = new Set(shown.map((result) => result.openLibraryId))
+        return [...shown, ...found.results.filter((result) => !seen.has(result.openLibraryId))]
+      })
+      setTotal(found.total)
+      setPage(page + 1)
+    } catch (err) {
+      if (controller.signal.aborted) return
+      setError(err instanceof Error ? err.message : 'failed to load more')
+    } finally {
+      if (!controller.signal.aborted) setLoadingMore(false)
+    }
+  }
 
   async function add(result: BookSearchResult) {
     setAddingId(result.openLibraryId)
@@ -130,8 +188,17 @@ export function SearchModal({
     }
   }
 
-  const tooShort = trimmed.length < minimumQueryLength
-  const visibleResults = tooShort ? [] : results
+  const visibleResults = canSearch ? results : []
+  const current = searched === search
+  const hasMore = canSearch && current && !loading && page * pageSize < total
+
+  let status = ' '
+  if (tooShort) status = `Type at least ${minimumQueryLength} characters to search Open Library.`
+  else if (!canSearch) status = 'Type a title, author or ISBN, or pick a genre to browse.'
+  else if (loading) status = 'Searching…'
+  else if (current && !error && results.length === 0)
+    status = 'No books match. Try a different spelling or fewer filters.'
+  else if (current && !error) status = `Showing ${results.length} of ${total.toLocaleString()} books`
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -151,6 +218,18 @@ export function SearchModal({
           placeholder="Search by title, author, or ISBN"
           aria-label="Search Open Library"
         />
+        <div className="genre-chips" role="group" aria-label="Genre">
+          {genres.map((option) => (
+            <button
+              key={option.value}
+              className={genre === option.value ? 'chip active' : 'chip'}
+              aria-pressed={genre === option.value}
+              onClick={() => setGenre(genre === option.value ? '' : option.value)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
         <div className="search-filters">
           <div className="filter-tabs" role="group" aria-label="Sort">
             {sorts.map((option) => (
@@ -181,13 +260,7 @@ export function SearchModal({
           </div>
         </div>
         <p className="search-status" aria-live="polite">
-          {tooShort
-            ? `Type at least ${minimumQueryLength} characters to search Open Library.`
-            : loading
-              ? 'Searching…'
-              : !error && searchedFor === trimmed && results.length === 0
-                ? 'No books match. Try a different spelling or fewer filters.'
-                : ' '}
+          {status}
         </p>
         {error && <p className="error">{error}</p>}
         <ul className={loading ? 'search-results stale' : 'search-results'}>
@@ -215,6 +288,11 @@ export function SearchModal({
             )
           })}
         </ul>
+        {hasMore && (
+          <button className="load-more" onClick={loadMore} disabled={loadingMore}>
+            {loadingMore ? 'Loading…' : 'Load more'}
+          </button>
+        )}
       </div>
     </div>
   )

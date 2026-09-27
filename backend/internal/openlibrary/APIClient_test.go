@@ -19,7 +19,7 @@ func TestSearch(t *testing.T) {
 		Convey("When searching with an empty query", func() {
 			results, err := client.Search(openlibrary.SearchInput{Query: ""})
 			Convey("Then it returns ErrEmptyQuery without making a request", func() {
-				So(results, ShouldBeNil)
+				So(results.Results, ShouldBeEmpty)
 				So(merry.Is(err, openlibrary.ErrEmptyQuery), ShouldBeTrue)
 			})
 		})
@@ -29,7 +29,7 @@ func TestSearch(t *testing.T) {
 		Convey("When searching with fewer than 3 characters around whitespace", func() {
 			results, err := client.Search(openlibrary.SearchInput{Query: "  ab  "})
 			Convey("Then it returns ErrQueryTooShort without making a request", func() {
-				So(results, ShouldBeNil)
+				So(results.Results, ShouldBeEmpty)
 				So(merry.Is(err, openlibrary.ErrQueryTooShort), ShouldBeTrue)
 				So(merry.HTTPCode(err), ShouldEqual, http.StatusBadRequest)
 				So(merry.UserMessage(err), ShouldEqual, "search for at least 3 characters")
@@ -45,7 +45,7 @@ func TestSearch(t *testing.T) {
 		Convey("When searching", func() {
 			results, err := client.Search(openlibrary.SearchInput{Query: "the"})
 			Convey("Then it returns ErrQueryRejected as a client error", func() {
-				So(results, ShouldBeNil)
+				So(results.Results, ShouldBeEmpty)
 				So(merry.Is(err, openlibrary.ErrQueryRejected), ShouldBeTrue)
 				So(merry.HTTPCode(err), ShouldEqual, http.StatusBadRequest)
 			})
@@ -60,7 +60,7 @@ func TestSearch(t *testing.T) {
 		Convey("When searching", func() {
 			results, err := client.Search(openlibrary.SearchInput{Query: "dune"})
 			Convey("Then it returns ErrUpstreamUnavailable, keeping the upstream status for the logs", func() {
-				So(results, ShouldBeNil)
+				So(results.Results, ShouldBeEmpty)
 				So(merry.Is(err, openlibrary.ErrUpstreamUnavailable), ShouldBeTrue)
 				So(merry.HTTPCode(err), ShouldEqual, http.StatusBadGateway)
 				So(fmt.Sprintf("%v", err), ShouldContainSubstring, "status 429")
@@ -73,6 +73,7 @@ func TestSearch(t *testing.T) {
 			receivedUserAgent = request.Header.Get("User-Agent")
 			responseWriter.Header().Set("Content-Type", "application/json")
 			_, _ = responseWriter.Write([]byte(`{
+				"numFound": 57,
 				"docs": [{
 					"key": "/works/OL893415W",
 					"title": "Dune",
@@ -97,8 +98,9 @@ func TestSearch(t *testing.T) {
 			})
 			Convey("Then it maps the work into a Result, preferring a 13-digit ISBN", func() {
 				So(err, ShouldBeNil)
-				So(results, ShouldHaveLength, 2)
-				So(results[0], ShouldResemble, openlibrary.Result{
+				So(results.Results, ShouldHaveLength, 2)
+				So(results.Total, ShouldEqual, 57)
+				So(results.Results[0], ShouldResemble, openlibrary.Result{
 					OpenLibraryID:    "OL893415W",
 					Title:            "Dune",
 					Author:           "Frank Herbert",
@@ -110,7 +112,7 @@ func TestSearch(t *testing.T) {
 				})
 			})
 			Convey("Then a work without author, ISBN or cover leaves those fields empty", func() {
-				So(results[1], ShouldResemble, openlibrary.Result{
+				So(results.Results[1], ShouldResemble, openlibrary.Result{
 					OpenLibraryID: "OL1W",
 					Title:         "Untitled",
 				})
@@ -200,6 +202,35 @@ func TestSearchFilters(t *testing.T) {
 				So(received.Get("sort"), ShouldEqual, "rating")
 			})
 		})
+		Convey("When browsing a genre without a query", func() {
+			_, err := client.Search(openlibrary.SearchInput{Subject: "science fiction"})
+			Convey("Then it searches the quoted subject alone", func() {
+				So(err, ShouldBeNil)
+				So(received.Get("q"), ShouldEqual, `subject:"science fiction"`)
+			})
+		})
+		Convey("When searching a genre with a query", func() {
+			_, err := client.Search(openlibrary.SearchInput{Query: "le guin", Subject: "fantasy"})
+			Convey("Then the subject narrows the query", func() {
+				So(err, ShouldBeNil)
+				So(received.Get("q"), ShouldEqual, `le guin subject:"fantasy"`)
+			})
+		})
+		Convey("When asking for the third page", func() {
+			_, err := client.Search(openlibrary.SearchInput{Query: "le guin", Page: 3})
+			Convey("Then it requests that page at the page size", func() {
+				So(err, ShouldBeNil)
+				So(received.Get("page"), ShouldEqual, "3")
+				So(received.Get("limit"), ShouldEqual, "20")
+			})
+		})
+		Convey("When asking for the first page", func() {
+			_, err := client.Search(openlibrary.SearchInput{Query: "le guin", Page: 1})
+			Convey("Then it leaves the page to Open Library's default", func() {
+				So(err, ShouldBeNil)
+				So(received.Has("page"), ShouldBeFalse)
+			})
+		})
 		Convey("When searching with only a start year", func() {
 			_, err := client.Search(openlibrary.SearchInput{Query: "le guin", PublishedFrom: 2010})
 			Convey("Then the range is open-ended", func() {
@@ -220,6 +251,24 @@ func TestSearchFilters(t *testing.T) {
 			_, err := client.Search(openlibrary.SearchInput{Query: "le guin", Language: "eng language:fre"})
 			Convey("Then it returns ErrInvalidLanguage rather than injecting a clause", func() {
 				So(merry.Is(err, openlibrary.ErrInvalidLanguage), ShouldBeTrue)
+			})
+		})
+		Convey("When searching with neither a query nor a subject", func() {
+			_, err := client.Search(openlibrary.SearchInput{Sort: openlibrary.SortRating})
+			Convey("Then it returns ErrEmptyQuery", func() {
+				So(merry.Is(err, openlibrary.ErrEmptyQuery), ShouldBeTrue)
+			})
+		})
+		Convey("When the subject tries to close its quotes and add a clause", func() {
+			_, err := client.Search(openlibrary.SearchInput{Subject: `fantasy" OR author:"x`})
+			Convey("Then it returns ErrInvalidSubject", func() {
+				So(merry.Is(err, openlibrary.ErrInvalidSubject), ShouldBeTrue)
+			})
+		})
+		Convey("When asking for a negative page", func() {
+			_, err := client.Search(openlibrary.SearchInput{Query: "le guin", Page: -1})
+			Convey("Then it returns ErrInvalidPage", func() {
+				So(merry.Is(err, openlibrary.ErrInvalidPage), ShouldBeTrue)
 			})
 		})
 		Convey("When searching with a reversed year range", func() {

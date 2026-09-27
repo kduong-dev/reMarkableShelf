@@ -419,6 +419,36 @@ a:hover {
   font-size: 0.9rem;
 }
 
+.genre-chips {
+  display: flex;
+  gap: 6px;
+  margin-top: 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-right: 32px;
+  /* Fades the last chips out so the row reads as scrollable. */
+  mask-image: linear-gradient(to right, #000 calc(100% - 48px), transparent);
+}
+
+.chip {
+  flex-shrink: 0;
+  padding: 5px 12px;
+  font-size: 0.85rem;
+  border-color: var(--divider-strong);
+}
+
+.chip.active,
+.chip.active:hover {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+}
+
+.load-more {
+  display: block;
+  margin: 20px auto 4px;
+}
+
 .search-status {
   margin: 12px 0 0;
   min-height: 1.5em;

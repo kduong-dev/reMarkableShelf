@@ -81,6 +81,18 @@ func (s *Store) MarkDeviceIdentityChanged(id string) error {
 	return merry.Wrap(err)
 }
 
+// DeleteDevice removes a device and, by cascade, its synced documents.
+func (s *Store) DeleteDevice(id string) error {
+	result, err := s.DB.Exec(`DELETE FROM devices WHERE id = ?`, id)
+	if err != nil {
+		return merry.Wrap(err).WithUserMessage("removing device")
+	}
+	if count, _ := result.RowsAffected(); count == 0 {
+		return merry.New("device not found").WithHTTPCode(http.StatusNotFound).WithUserMessagef("no device with id %q", id)
+	}
+	return nil
+}
+
 func scanDevice(row rowScanner) (models.Device, error) {
 	var d models.Device
 	err := row.Scan(&d.ID, &d.Name, &d.Host, &d.LastSyncedAt, &d.PairedAt, &d.HostKey, &d.IdentityChanged)

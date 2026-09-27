@@ -132,6 +132,16 @@ func (syncer *Syncer) RegisterDevice(input RegisterDeviceInput) (models.Device, 
 	if input.Password == "" {
 		return models.Device{}, merry.Here(ErrPasswordRequired)
 	}
+	devices, err := syncer.store.ListDevices()
+	if err != nil {
+		return models.Device{}, err
+	}
+	for _, device := range devices {
+		if strings.EqualFold(device.Host, input.Host) {
+			return models.Device{}, merry.Here(ErrDeviceAlreadyRegistered).
+				WithUserMessagef("%s is already registered as %q; pair that one again instead of adding it twice", device.Host, device.Name)
+		}
+	}
 	hostKey, err := syncer.remarkable.Pair(remarkable.Tablet{Host: input.Host}, input.Password)
 	if err != nil {
 		return models.Device{}, err

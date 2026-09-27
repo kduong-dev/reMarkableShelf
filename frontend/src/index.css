@@ -612,6 +612,10 @@ a:hover {
   margin: 0 0 4px;
 }
 
+.remove-device {
+  margin-left: auto;
+}
+
 .last-synced {
   color: var(--text-muted);
   font-size: 0.875rem;

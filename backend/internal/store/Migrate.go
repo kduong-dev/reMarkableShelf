@@ -89,6 +89,20 @@ func (s *Store) migrate() error {
 			return err
 		}
 	}
+	return s.removeOrphans()
+}
+
+// removeOrphans repairs rows left behind while foreign keys weren't
+// enforced: documents linked to deleted books, and documents of deleted
+// devices.
+func (s *Store) removeOrphans() error {
+	_, err := s.DB.Exec(`
+		UPDATE remarkable_documents SET linked_book_id = NULL
+		 WHERE linked_book_id IS NOT NULL AND linked_book_id NOT IN (SELECT id FROM books);
+		DELETE FROM remarkable_documents WHERE device_id NOT IN (SELECT id FROM devices);`)
+	if err != nil {
+		return merry.Wrap(err).WithUserMessage("removing orphaned documents")
+	}
 	return nil
 }
 

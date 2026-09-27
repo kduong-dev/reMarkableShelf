@@ -14,7 +14,10 @@ type Store struct {
 }
 
 func Open(path string) (*Store, error) {
-	db, err := sql.Open("sqlite", path)
+	// SQLite ignores the schema's REFERENCES clauses, including ON DELETE
+	// CASCADE and SET NULL, unless foreign keys are switched on per
+	// connection, which the DSN does for every connection the pool opens.
+	db, err := sql.Open("sqlite", path+"?_pragma=foreign_keys(1)")
 	if err != nil {
 		return nil, merry.Wrap(err)
 	}

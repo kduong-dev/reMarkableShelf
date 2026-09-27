@@ -97,6 +97,22 @@ export function Sync() {
     await linkToExisting(doc, book.id)
   }
 
+  async function removeDevice() {
+    const device = devices.find((d) => d.id === selected)
+    if (!device) return
+    if (!confirm(`Remove ${device.name} (${device.host})? Its synced documents and their links go with it; your books and bookmarks stay.`)) return
+    setError(null)
+    try {
+      await api.deleteDevice(device.id)
+      const remaining = devices.filter((d) => d.id !== device.id)
+      setDevices(remaining)
+      setDocs([])
+      setSelected(remaining[0]?.id ?? '')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'failed to remove device')
+    }
+  }
+
   async function unlink(doc: RemarkableDocument) {
     await api.unlinkDocument(selected, doc.uuid)
     setDocs((prev) => prev.map((d) => (d.uuid === doc.uuid ? { ...d, linkedBookId: undefined } : d)))
@@ -168,6 +184,9 @@ export function Sync() {
               Last synced {new Date(devices.find((d) => d.id === selected)!.lastSyncedAt!).toLocaleString()}
             </span>
           )}
+          <button className="text-button remove-device" onClick={removeDevice}>
+            Remove device
+          </button>
         </div>
       )}
 

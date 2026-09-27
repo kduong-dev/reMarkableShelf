@@ -417,6 +417,20 @@ func TestPairing(t *testing.T) {
 				So(devices, ShouldBeEmpty)
 			})
 		})
+		Convey("When registering an address that's already registered", func() {
+			_, err := register()
+			So(err, ShouldBeNil)
+			tablet.pairedWith = ""
+			_, err = syncer.RegisterDevice(devicesync.RegisterDeviceInput{Name: "Paper Pro again", Host: "10.0.0.5", Password: "secret"})
+			Convey("Then it returns ErrDeviceAlreadyRegistered without using the password", func() {
+				So(merry.Is(err, devicesync.ErrDeviceAlreadyRegistered), ShouldBeTrue)
+				So(merry.UserMessage(err), ShouldContainSubstring, "Paper Pro")
+				So(tablet.pairedWith, ShouldBeEmpty)
+				devices, err := opened.ListDevices()
+				So(err, ShouldBeNil)
+				So(devices, ShouldHaveLength, 1)
+			})
+		})
 		Convey("When registering without a password", func() {
 			_, err := syncer.RegisterDevice(devicesync.RegisterDeviceInput{Name: "Paper Pro", Host: "10.0.0.5"})
 			Convey("Then it returns ErrPasswordRequired without contacting the tablet", func() {

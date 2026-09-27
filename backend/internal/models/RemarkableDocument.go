@@ -20,6 +20,8 @@ const (
 // CurrentPage counts from 1 in the tablet's own pages and is nil for a
 // document never opened; PositionUpdatedAt is the tablet's last activity
 // on the document, used to tell whether its position is newer than the app's.
+// BookTitle and BookAuthor are read from the file itself when the tablet
+// could (usually EPUBs), whereas Title is its name in the tablet's library.
 type RemarkableDocument struct {
 	UUID              string     `json:"uuid"`
 	DeviceID          string     `json:"deviceId"`
@@ -30,4 +32,6 @@ type RemarkableDocument struct {
 	CurrentPage       *int       `json:"currentPage,omitempty"`
 	PageCount         *int       `json:"pageCount,omitempty"`
 	PositionUpdatedAt *time.Time `json:"positionUpdatedAt,omitempty"`
+	BookTitle         string     `json:"bookTitle,omitempty"`
+	BookAuthor        string     `json:"bookAuthor,omitempty"`
 }

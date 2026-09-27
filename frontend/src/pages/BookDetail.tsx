@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api/client'
+import { bookFromResult } from '../bookFromResult'
+import { cleanFileName } from '../bookSearchQuery'
 import { Bookmark } from '../components/Bookmark'
+import { SearchModal } from '../components/SearchModal'
 import { useRefreshOnFocus } from '../useRefreshOnFocus'
 import type { Book, BookStatus } from '../api/types'
 
@@ -16,6 +19,7 @@ export function BookDetail() {
   const navigate = useNavigate()
   const [book, setBook] = useState<Book | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [matching, setMatching] = useState(false)
 
   function load() {
     if (!id) return
@@ -62,6 +66,11 @@ export function BookDetail() {
           {book.source === 'remarkable' && (
             <span className="badge badge-remarkable">Synced from reMarkable</span>
           )}
+          {!book.openLibraryId && (
+            <button className="text-button find-match" onClick={() => setMatching(true)}>
+              Find on Open Library
+            </button>
+          )}
           <div className="status-picker">
             {statusOptions.map((opt) => (
               <button
@@ -84,6 +93,21 @@ export function BookDetail() {
           </button>
         </div>
       </div>
+      {matching && (
+        <SearchModal
+          shelf={[]}
+          heading="Find on Open Library"
+          initialQuery={[cleanFileName(book.title), book.author].filter(Boolean).join(' ')}
+          chooseLabel="Use this"
+          onClose={() => setMatching(false)}
+          onChoose={async (result) => {
+            // Takes the edition's details; the bookmark keeps its place.
+            const { source: _source, ...details } = bookFromResult(result, book.source)
+            setBook(await api.updateBook(book.id, details))
+            setMatching(false)
+          }}
+        />
+      )}
     </section>
   )
 }

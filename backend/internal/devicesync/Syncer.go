@@ -144,6 +144,27 @@ func (syncer *Syncer) PairDevice(deviceID, password string) (models.Device, erro
 	return device, nil
 }
 
+// LinkDocument links a tablet document to a book and applies the position
+// already synced for it, so the book shows progress without waiting for the
+// next sync.
+func (syncer *Syncer) LinkDocument(deviceID, documentUUID, bookID string) error {
+	syncer.mutex.Lock()
+	defer syncer.mutex.Unlock()
+	if err := syncer.store.LinkDocumentToBook(deviceID, documentUUID, bookID); err != nil {
+		return err
+	}
+	documents, err := syncer.store.ListDocumentsByDevice(deviceID)
+	if err != nil {
+		return err
+	}
+	for _, document := range documents {
+		if document.UUID == documentUUID {
+			return syncer.applyTabletProgress([]models.RemarkableDocument{document})
+		}
+	}
+	return nil
+}
+
 func (syncer *Syncer) autoLinkDocuments(deviceID string) error {
 	documents, err := syncer.store.ListDocumentsByDevice(deviceID)
 	if err != nil {

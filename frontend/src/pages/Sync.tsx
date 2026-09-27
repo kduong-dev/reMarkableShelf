@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
+import { bookFromResult } from '../bookFromResult'
 import type { Book, Device, RemarkableDocument } from '../api/types'
+import { documentSearchQuery } from '../bookSearchQuery'
+import { SearchModal } from '../components/SearchModal'
 
 export function Sync() {
   const [devices, setDevices] = useState<Device[]>([])
@@ -14,6 +17,8 @@ export function Sync() {
   const [registerError, setRegisterError] = useState<string | null>(null)
   const [pairPassword, setPairPassword] = useState('')
   const [pairing, setPairing] = useState(false)
+  // The tablet document being matched to a book on Open Library.
+  const [finding, setFinding] = useState<RemarkableDocument | null>(null)
 
   useEffect(() => {
     api.listDevices().then((list) => {
@@ -79,11 +84,12 @@ export function Sync() {
     }
   }
 
+  // addAsNewBook adds a document Open Library doesn't know, such as a
+  // personal PDF, under its file name.
   async function addAsNewBook(doc: RemarkableDocument) {
     const book = await api.createBook({ title: doc.title, author: '', source: 'remarkable' })
     setBooks((prev) => [book, ...prev])
-    await api.linkDocument(selected, doc.uuid, book.id)
-    setDocs((prev) => prev.map((d) => (d.uuid === doc.uuid ? { ...d, linkedBookId: book.id } : d)))
+    await linkToExisting(doc, book.id)
   }
 
   async function linkToExisting(doc: RemarkableDocument, bookId: string) {
@@ -203,7 +209,12 @@ export function Sync() {
                         </option>
                       ))}
                     </select>
-                    <button onClick={() => addAsNewBook(doc)}>Add as new book</button>
+                    <button className="primary" onClick={() => setFinding(doc)}>
+                      Find book
+                    </button>
+                    <button className="text-button" onClick={() => addAsNewBook(doc)}>
+                      Add as is
+                    </button>
                   </div>
                 )}
               </li>
@@ -224,6 +235,26 @@ export function Sync() {
             ))}
           </ul>
         </>
+      )}
+
+      {finding && (
+        <SearchModal
+          shelf={books}
+          heading="Find this book"
+          initialQuery={documentSearchQuery(finding)}
+          chooseLabel="Add & link"
+          onClose={() => setFinding(null)}
+          onChoose={async (result) => {
+            const book = await api.createBook(bookFromResult(result, 'remarkable'))
+            setBooks((prev) => [book, ...prev])
+            await linkToExisting(finding, book.id)
+            setFinding(null)
+          }}
+          onChooseShelved={async (book) => {
+            await linkToExisting(finding, book.id)
+            setFinding(null)
+          }}
+        />
       )}
     </section>
   )

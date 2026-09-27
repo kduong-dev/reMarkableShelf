@@ -23,12 +23,21 @@ type metadata struct {
 
 // content mirrors the fields we need from a <uuid>.content file. fileType
 // is the signal that distinguishes an imported PDF/EPUB from a native
-// handwritten notebook — see Classify.go. Newer firmware (formatVersion 2)
+// handwritten notebook — see Classify.go. documentMetadata holds the book's
+// own title and authors when the tablet could read them. Newer firmware (formatVersion 2)
 // records the open page in cPages rather than the metadata's lastOpenedPage.
 type content struct {
-	FileType  string  `json:"fileType"`
-	PageCount int     `json:"pageCount"`
-	CPages    *cPages `json:"cPages"`
+	FileType         string           `json:"fileType"`
+	PageCount        int              `json:"pageCount"`
+	CPages           *cPages          `json:"cPages"`
+	DocumentMetadata documentMetadata `json:"documentMetadata"`
+}
+
+// documentMetadata is what the tablet read from the file itself, usually
+// filled in for EPUBs and empty for PDFs.
+type documentMetadata struct {
+	Title   string   `json:"title"`
+	Authors []string `json:"authors"`
 }
 
 type cPages struct {

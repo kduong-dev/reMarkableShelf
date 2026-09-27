@@ -39,6 +39,8 @@ export interface RemarkableDocument {
   currentPage?: number
   pageCount?: number
   positionUpdatedAt?: string
+  bookTitle?: string
+  bookAuthor?: string
 }
 
 export interface BookSearchResult {

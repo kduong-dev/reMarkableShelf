@@ -93,6 +93,10 @@ func ParseListOutput(output string) ([]models.RemarkableDocument, error) {
 			Title:        title,
 			FileType:     Classify(c.FileType),
 			LastModified: lastModified,
+			BookTitle:    strings.TrimSpace(c.DocumentMetadata.Title),
+		}
+		if len(c.DocumentMetadata.Authors) > 0 {
+			document.BookAuthor = strings.TrimSpace(c.DocumentMetadata.Authors[0])
 		}
 		if position, ok := documentPosition(meta, c); ok {
 			document.CurrentPage = &position.currentPage

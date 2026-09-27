@@ -23,9 +23,7 @@ func (api *API) LinkDocument(responseWriter http.ResponseWriter, request *http.R
 		return
 	}
 	vars := mux.Vars(request)
-	bookID := vars["id"]
-	documentUUID := vars["uuid"]
-	err = api.store.LinkDocumentToBook(bookID, documentUUID, body.BookID)
+	err = api.syncer.LinkDocument(vars["id"], vars["uuid"], body.BookID)
 	if err != nil {
 		return
 	}

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api/client'
+import { bookFromResult } from '../bookFromResult'
 import { BookCard } from '../components/BookCard'
 import { SearchModal } from '../components/SearchModal'
 import { useRefreshOnFocus } from '../useRefreshOnFocus'
@@ -87,7 +88,8 @@ export function Library() {
         <SearchModal
           shelf={books}
           onClose={() => setShowAdd(false)}
-          onAdded={(book) => {
+          onChoose={async (result) => {
+            const book = await api.createBook(bookFromResult(result, 'manual'))
             setBooks((prev) => [book, ...prev])
             setShowAdd(false)
           }}

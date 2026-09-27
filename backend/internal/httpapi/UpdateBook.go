@@ -19,6 +19,9 @@ func (api *API) UpdateBook(responseWriter http.ResponseWriter, request *http.Req
 	if err != nil {
 		return
 	}
+	// Matching a book to an Open Library edition sets its ISBN; take that
+	// edition's page count as adding a book does.
+	api.applyEditionPageCount(&body)
 	vars := mux.Vars(request)
 	bookID := vars["id"]
 	book, err := api.store.UpdateBook(bookID, body)

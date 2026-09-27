@@ -632,6 +632,26 @@ a:hover {
   min-width: 160px;
 }
 
+.text-button,
+.text-button:hover {
+  border: none;
+  background: transparent;
+  padding: 8px 4px;
+  color: var(--text-muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.text-button:hover {
+  color: var(--ink);
+}
+
+.find-match {
+  display: block;
+  margin-top: 4px;
+  padding-left: 0;
+}
+
 .doc-position {
   color: var(--text-muted);
   font-size: 0.875rem;

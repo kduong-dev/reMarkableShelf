@@ -45,12 +45,31 @@ func TestBookProgress(t *testing.T) {
 				So(merry.Is(err, store.ErrCurrentPageOutOfRange), ShouldBeTrue)
 			})
 		})
-		Convey("When shrinking the page count below the bookmark", func() {
+		Convey("When changing only the page count of a bookmarked book", func() {
 			_, err := opened.UpdateBook(book.ID, models.Book{CurrentPage: pages(300)})
 			So(err, ShouldBeNil)
-			_, err = opened.UpdateBook(book.ID, models.Book{PageCount: pages(200)})
+			updated, err := opened.UpdateBook(book.ID, models.Book{PageCount: pages(200)})
+			Convey("Then the bookmark keeps its place, the same fraction through", func() {
+				So(err, ShouldBeNil)
+				So(*updated.CurrentPage, ShouldEqual, 110)
+				So(*updated.PageCount, ShouldEqual, 200)
+			})
+		})
+		Convey("When setting a page and a page count it's past the end of", func() {
+			_, err := opened.UpdateBook(book.ID, models.Book{CurrentPage: pages(300), PageCount: pages(200)})
 			Convey("Then it returns ErrCurrentPageOutOfRange", func() {
 				So(merry.Is(err, store.ErrCurrentPageOutOfRange), ShouldBeTrue)
+			})
+		})
+		Convey("When matching the book to an Open Library edition", func() {
+			updated, err := opened.UpdateBook(book.ID, models.Book{Title: "Dune (Deluxe)", ISBN: "9780593099322", OpenLibraryID: "OL893415W"})
+			Convey("Then its ISBN and Open Library ID are saved", func() {
+				So(err, ShouldBeNil)
+				stored, err := opened.GetBook(updated.ID)
+				So(err, ShouldBeNil)
+				So(stored.Title, ShouldEqual, "Dune (Deluxe)")
+				So(stored.ISBN, ShouldEqual, "9780593099322")
+				So(stored.OpenLibraryID, ShouldEqual, "OL893415W")
 			})
 		})
 		Convey("When setting a page count of zero", func() {

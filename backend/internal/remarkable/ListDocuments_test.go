@@ -65,9 +65,10 @@ func TestParseListOutput(t *testing.T) {
 		})
 	})
 	Convey("Given a formatVersion 2 EPUB whose open page is recorded in cPages", t, func() {
-		output := record("5b1c", `{"type": "DocumentType", "visibleName": "Piranesi", "lastOpened": "1759000000000", "lastModified": "1759000500000"}`, `{
+		output := record("5b1c", `{"type": "DocumentType", "visibleName": "piranesi_clarke.epub", "lastOpened": "1759000000000", "lastModified": "1759000500000"}`, `{
 			"fileType": "epub",
 			"formatVersion": 2,
+			"documentMetadata": {"title": "Piranesi", "authors": ["Susanna Clarke"]},
 			"pageCount": 3,
 			"cPages": {
 				"lastOpened": {"timestamp": "1:2", "value": "page-c"},
@@ -87,6 +88,11 @@ func TestParseListOutput(t *testing.T) {
 				So(*documents[0].CurrentPage, ShouldEqual, 3)
 				So(*documents[0].PageCount, ShouldEqual, 3)
 				So(*documents[0].PositionUpdatedAt, ShouldEqual, time.UnixMilli(1759000500000).UTC())
+			})
+			Convey("Then the book's own title and author are kept beside its file name", func() {
+				So(documents[0].Title, ShouldEqual, "piranesi_clarke.epub")
+				So(documents[0].BookTitle, ShouldEqual, "Piranesi")
+				So(documents[0].BookAuthor, ShouldEqual, "Susanna Clarke")
 			})
 		})
 	})

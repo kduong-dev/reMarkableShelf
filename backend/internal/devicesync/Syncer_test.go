@@ -149,6 +149,33 @@ func TestSyncDevice(t *testing.T) {
 	})
 }
 
+func TestLinkDocument(t *testing.T) {
+	Convey("Given a synced tablet document open on page 42 of 171", t, func() {
+		opened, err := store.Open(filepath.Join(t.TempDir(), "books.db"))
+		So(err, ShouldBeNil)
+		Reset(func() { _ = opened.Close() })
+		device, err := opened.CreateDevice(models.Device{Name: "Paper Pro", Host: "10.0.0.5"})
+		So(err, ShouldBeNil)
+		tablet := &fakeTablet{documents: []models.RemarkableDocument{
+			openedDocument("dale-carnegie.pdf", 42, 171, time.Now().UTC().Add(-time.Hour).Truncate(time.Millisecond)),
+		}}
+		syncer := devicesync.NewSyncer(opened, tablet)
+		_, err = syncer.SyncDevice(device.ID)
+		So(err, ShouldBeNil)
+		Convey("When linking it to a 280-page book", func() {
+			book, err := opened.CreateBook(models.Book{Title: "How to Win Friends and Influence People", PageCount: pages(280)})
+			So(err, ShouldBeNil)
+			So(syncer.LinkDocument(device.ID, "document-1", book.ID), ShouldBeNil)
+			Convey("Then the book takes the tablet's position straight away", func() {
+				linked, err := opened.GetBook(book.ID)
+				So(err, ShouldBeNil)
+				So(*linked.CurrentPage, ShouldEqual, 69)
+				So(linked.Status, ShouldEqual, models.StatusReading)
+			})
+		})
+	})
+}
+
 func TestPairing(t *testing.T) {
 	Convey("Given a syncer with no devices", t, func() {
 		opened, err := store.Open(filepath.Join(t.TempDir(), "books.db"))

@@ -90,7 +90,19 @@ func (s *Store) UpdateBook(id string, patch models.Book) (models.Book, error) {
 	if patch.CoverURL != "" {
 		existing.CoverURL = patch.CoverURL
 	}
+	if patch.ISBN != "" {
+		existing.ISBN = patch.ISBN
+	}
+	if patch.OpenLibraryID != "" {
+		existing.OpenLibraryID = patch.OpenLibraryID
+	}
 	if patch.PageCount != nil {
+		// A new page count on its own, e.g. from matching the book to an
+		// edition, keeps the bookmark the same fraction of the way through.
+		if patch.CurrentPage == nil && existing.CurrentPage != nil && existing.PageCount != nil {
+			scaled := models.ScalePage(*existing.CurrentPage, *existing.PageCount, *patch.PageCount)
+			existing.CurrentPage = &scaled
+		}
 		existing.PageCount = patch.PageCount
 	}
 	existing.UpdatedAt = time.Now().UTC()
@@ -103,8 +115,8 @@ func (s *Store) UpdateBook(id string, patch models.Book) (models.Book, error) {
 	}
 
 	_, err = s.DB.Exec(
-		`UPDATE books SET title = ?, author = ?, isbn = ?, cover_url = ?, status = ?, rating = ?, page_count = ?, current_page = ?, progress_updated_at = ?, progress_source = ?, updated_at = ? WHERE id = ?`,
-		existing.Title, existing.Author, existing.ISBN, existing.CoverURL, existing.Status, existing.Rating, existing.PageCount, existing.CurrentPage, existing.ProgressUpdatedAt, existing.ProgressSource, existing.UpdatedAt, existing.ID,
+		`UPDATE books SET title = ?, author = ?, isbn = ?, cover_url = ?, open_library_id = ?, status = ?, rating = ?, page_count = ?, current_page = ?, progress_updated_at = ?, progress_source = ?, updated_at = ? WHERE id = ?`,
+		existing.Title, existing.Author, existing.ISBN, existing.CoverURL, existing.OpenLibraryID, existing.Status, existing.Rating, existing.PageCount, existing.CurrentPage, existing.ProgressUpdatedAt, existing.ProgressSource, existing.UpdatedAt, existing.ID,
 	)
 	if err != nil {
 		return models.Book{}, merry.Wrap(err).WithUserMessage("updating book")

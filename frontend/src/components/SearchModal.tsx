@@ -75,14 +75,25 @@ function resultDetails(result: BookSearchResult): string {
 
 export function SearchModal({
   shelf,
+  heading = 'Add a book',
+  initialQuery = '',
+  chooseLabel = 'Add',
+  onChoose,
+  onChooseShelved,
   onClose,
-  onAdded,
 }: {
   shelf: Book[]
+  heading?: string
+  initialQuery?: string
+  chooseLabel?: string
+  // onChoose acts on the picked result, such as adding it to the library.
+  onChoose: (result: BookSearchResult) => Promise<void>
+  // When set, a result already on the shelf offers to be chosen as that book
+  // rather than linking to it.
+  onChooseShelved?: (book: Book) => Promise<void>
   onClose: () => void
-  onAdded: (book: Book) => void
 }) {
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState(initialQuery)
   const [genre, setGenre] = useState('')
   const [showAllGenres, setShowAllGenres] = useState(false)
   const [sort, setSort] = useState<SearchSort>('')
@@ -172,21 +183,13 @@ export function SearchModal({
     }
   }
 
-  async function add(result: BookSearchResult) {
-    setAddingId(result.openLibraryId)
+  async function choose(id: string, action: () => Promise<void>) {
+    setAddingId(id)
+    setError(null)
     try {
-      const book = await api.createBook({
-        title: result.title,
-        author: result.author,
-        isbn: result.isbn,
-        coverUrl: result.coverUrl,
-        pageCount: result.pageCount,
-        openLibraryId: result.openLibraryId,
-        source: 'manual',
-      })
-      onAdded(book)
+      await action()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'failed to add book')
+      setError(err instanceof Error ? err.message : 'something went wrong')
     } finally {
       setAddingId(null)
     }
@@ -213,7 +216,7 @@ export function SearchModal({
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal search-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>Add a book</h2>
+          <h2>{heading}</h2>
           <button className="icon-button" onClick={onClose} aria-label="Close">
             &times;
           </button>
@@ -295,13 +298,24 @@ export function SearchModal({
                   <div className="search-result-title">{result.title}</div>
                   <div className="search-result-author">{resultDetails(result)}</div>
                 </div>
-                {onShelf ? (
+                {onShelf && onChooseShelved ? (
+                  <button
+                    onClick={() => choose(result.openLibraryId, () => onChooseShelved(onShelf))}
+                    disabled={addingId === result.openLibraryId}
+                    title="Already on your shelf"
+                  >
+                    {addingId === result.openLibraryId ? 'Linking…' : 'Link to shelf'}
+                  </button>
+                ) : onShelf ? (
                   <Link to={`/books/${onShelf.id}`} className="on-shelf">
                     On your shelf
                   </Link>
                 ) : (
-                  <button onClick={() => add(result)} disabled={addingId === result.openLibraryId}>
-                    {addingId === result.openLibraryId ? 'Adding…' : 'Add'}
+                  <button
+                    onClick={() => choose(result.openLibraryId, () => onChoose(result))}
+                    disabled={addingId === result.openLibraryId}
+                  >
+                    {addingId === result.openLibraryId ? 'Saving…' : chooseLabel}
                   </button>
                 )}
               </li>

@@ -1,8 +1,6 @@
 package devicesync
 
 import (
-	"math"
-
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/models"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/store"
 )
@@ -30,8 +28,7 @@ func tabletProgress(book models.Book, document models.RemarkableDocument) (store
 	pageCount, currentPage := *document.PageCount, *document.CurrentPage
 	if book.PageCount != nil {
 		pageCount = *book.PageCount
-		currentPage = int(math.Round(float64(*document.CurrentPage) / float64(*document.PageCount) * float64(pageCount)))
-		currentPage = min(max(currentPage, 1), pageCount)
+		currentPage = models.ScalePage(*document.CurrentPage, *document.PageCount, pageCount)
 	}
 	status := models.StatusReading
 	if currentPage >= pageCount {

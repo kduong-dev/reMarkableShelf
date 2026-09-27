@@ -9,6 +9,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/ansel1/merry"
+	"github.com/kduong-dev/goutil/fatal"
+	"github.com/kduong-dev/goutil/httpx"
 )
 
 const (
@@ -42,6 +44,16 @@ func NewClientWithBaseURL(baseURL string) *APIClient {
 	}
 }
 
+// searchSentinels maps the statuses Open Library answers a search with when
+// the fault is the user's query, such as 422 for a lone stop word like "the".
+var searchSentinels = map[int]error{
+	http.StatusUnprocessableEntity: ErrQueryRejected,
+}
+
+var editionSentinels = map[int]error{
+	http.StatusNotFound: ErrEditionNotFound,
+}
+
 func (api *APIClient) Search(query string) ([]Result, error) {
 	query = strings.TrimSpace(query)
 	if query == "" {
@@ -50,18 +62,8 @@ func (api *APIClient) Search(query string) ([]Result, error) {
 	if utf8.RuneCountInString(query) < MinimumQueryLength {
 		return nil, merry.Here(ErrQueryTooShort)
 	}
-	response, err := api.get(api.createSearchURL(query))
-	if err != nil {
-		return nil, err
-	}
-	defer response.Body.Close()
-	// Open Library answers 422 for queries it refuses to run, such as a
-	// lone stop word like "the"; that is the user's query, not an outage.
-	if response.StatusCode == http.StatusUnprocessableEntity {
-		return nil, merry.Here(ErrQueryRejected).WithMessagef("open library rejected query %q", query)
-	}
 	var parsed searchResponse
-	if err := decodeJSON(response, &parsed); err != nil {
+	if err := api.getJSON(api.createSearchURL(query), searchSentinels, &parsed); err != nil {
 		return nil, err
 	}
 	results := make([]Result, 0, len(parsed.Docs))
@@ -77,16 +79,8 @@ func (api *APIClient) EditionPageCount(isbn string) (int, error) {
 	}
 	// The /isbn endpoint redirects to the edition's canonical URL, which
 	// the default client follows.
-	response, err := api.get(api.baseURL + "/isbn/" + url.PathEscape(isbn) + ".json")
-	if err != nil {
-		return 0, err
-	}
-	defer response.Body.Close()
-	if response.StatusCode == http.StatusNotFound {
-		return 0, merry.Here(ErrEditionNotFound).WithMessagef("no edition with isbn %s", isbn)
-	}
 	var parsed editionResponse
-	if err := decodeJSON(response, &parsed); err != nil {
+	if err := api.getJSON(api.baseURL+"/isbn/"+url.PathEscape(isbn)+".json", editionSentinels, &parsed); err != nil {
 		return 0, err
 	}
 	return parsed.PageCount, nil
@@ -100,25 +94,28 @@ func (api *APIClient) createSearchURL(query string) string {
 	return api.baseURL + "/search.json?" + values.Encode()
 }
 
-func (api *APIClient) get(requestURL string) (*http.Response, error) {
+// getJSON fetches requestURL and decodes its JSON body into output. Any
+// failure is reported as the sentinel matching the response's status in
+// sentinelByStatusCode, or ErrUpstreamUnavailable, with the underlying error
+// (for a bad status, the upstream status and body) kept as its cause.
+func (api *APIClient) getJSON(requestURL string, sentinelByStatusCode map[int]error, output any) error {
 	request, err := http.NewRequest(http.MethodGet, requestURL, nil)
-	if err != nil {
-		return nil, merry.Wrap(err)
-	}
+	fatal.OnError(err)
 	request.Header.Set("User-Agent", userAgent)
 	response, err := api.httpClient.Do(request)
 	if err != nil {
-		return nil, merry.Wrap(err).WithUserMessage("contacting Open Library")
+		return merry.WithCause(merry.Here(ErrUpstreamUnavailable), err)
 	}
-	return response, nil
-}
-
-func decodeJSON(response *http.Response, target any) error {
+	defer httpx.DrainAndClose(response.Body)
 	if response.StatusCode != http.StatusOK {
-		return merry.Here(ErrUpstreamUnavailable).WithMessagef("open library returned status %d", response.StatusCode)
+		sentinel, ok := sentinelByStatusCode[response.StatusCode]
+		if !ok {
+			sentinel = ErrUpstreamUnavailable
+		}
+		return merry.WithCause(merry.Here(sentinel), httpx.ResponseError(response))
 	}
-	if err := json.NewDecoder(response.Body).Decode(target); err != nil {
-		return merry.Wrap(err).WithUserMessage("parsing Open Library response")
+	if err := json.NewDecoder(response.Body).Decode(output); err != nil {
+		return merry.WithCause(merry.Here(ErrUpstreamUnavailable), err)
 	}
 	return nil
 }

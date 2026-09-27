@@ -1,11 +1,11 @@
 package main
 
 import (
-	"log"
 	"net/http"
 
 	"github.com/kduong-dev/goutil/config"
 	"github.com/kduong-dev/goutil/fatal"
+	"github.com/kduong-dev/goutil/logx"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/httpapi"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/openlibrary"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/remarkable"
@@ -30,7 +30,7 @@ func main() {
 		},
 	})
 
-	log.Printf("reMarkable Shelf server listening on :%s (db=%s)", port, dbPath)
+	logx.Noticef("reMarkable Shelf server listening on :%s (db=%s)", port, dbPath)
 	err = http.ListenAndServe(":"+port, handler)
 	fatal.OnError(err, "server exited: ")
 }

@@ -1,6 +1,7 @@
 package openlibrary_test
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -57,9 +58,11 @@ func TestSearch(t *testing.T) {
 		client := openlibrary.NewClientWithBaseURL(server.URL)
 		Convey("When searching", func() {
 			results, err := client.Search("dune")
-			Convey("Then it returns ErrUpstreamUnavailable", func() {
+			Convey("Then it returns ErrUpstreamUnavailable, keeping the upstream status for the logs", func() {
 				So(results, ShouldBeNil)
 				So(merry.Is(err, openlibrary.ErrUpstreamUnavailable), ShouldBeTrue)
+				So(merry.HTTPCode(err), ShouldEqual, http.StatusBadGateway)
+				So(fmt.Sprintf("%v", err), ShouldContainSubstring, "status 429")
 			})
 		})
 	})

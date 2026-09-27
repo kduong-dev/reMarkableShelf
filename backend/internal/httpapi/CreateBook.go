@@ -1,11 +1,11 @@
 package httpapi
 
 import (
-	"log"
 	"net/http"
 
 	"github.com/ansel1/merry"
 	"github.com/kduong-dev/goutil/httpx"
+	"github.com/kduong-dev/goutil/logx"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/models"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/openlibrary"
 )
@@ -40,7 +40,7 @@ func (api *API) applyEditionPageCount(book *models.Book) {
 	pageCount, err := api.openLibrary.EditionPageCount(book.ISBN)
 	if err != nil {
 		if !merry.Is(err, openlibrary.ErrEditionNotFound) {
-			log.Printf("looking up page count for isbn %s: %v", book.ISBN, err)
+			logx.Warnf("looking up page count for isbn %s: %v", book.ISBN, err)
 		}
 		return
 	}

@@ -8,7 +8,7 @@ import (
 	. "github.com/smartystreets/goconvey/convey"
 	_ "modernc.org/sqlite"
 
-	"github.com/kqvd/reMarkableShelf/backend/internal/store"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/store"
 )
 
 func TestMigrate(t *testing.T) {

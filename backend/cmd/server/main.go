@@ -6,10 +6,10 @@ import (
 
 	"github.com/kduong-dev/goutil/config"
 	"github.com/kduong-dev/goutil/fatal"
-	"github.com/kqvd/reMarkableShelf/backend/internal/httpapi"
-	"github.com/kqvd/reMarkableShelf/backend/internal/openlibrary"
-	"github.com/kqvd/reMarkableShelf/backend/internal/remarkable"
-	"github.com/kqvd/reMarkableShelf/backend/internal/store"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/httpapi"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/openlibrary"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/remarkable"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/store"
 )
 
 func main() {

@@ -8,7 +8,7 @@ import (
 	"github.com/ansel1/merry"
 	. "github.com/smartystreets/goconvey/convey"
 
-	"github.com/kqvd/reMarkableShelf/backend/internal/openlibrary"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/openlibrary"
 )
 
 func TestSearch(t *testing.T) {

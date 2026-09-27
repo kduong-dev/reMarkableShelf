@@ -7,7 +7,7 @@ import (
 
 	"github.com/ansel1/merry"
 	"github.com/google/uuid"
-	"github.com/kqvd/reMarkableShelf/backend/internal/models"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/models"
 )
 
 func (s *Store) ListBooks() ([]models.Book, error) {

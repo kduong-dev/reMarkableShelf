@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/kduong-dev/goutil/httpx"
-	"github.com/kqvd/reMarkableShelf/backend/internal/models"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/models"
 )
 
 func (api *API) CreateBook(responseWriter http.ResponseWriter, request *http.Request) {

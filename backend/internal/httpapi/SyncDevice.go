@@ -7,8 +7,8 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/kduong-dev/goutil/httpx"
-	"github.com/kqvd/reMarkableShelf/backend/internal/models"
-	"github.com/kqvd/reMarkableShelf/backend/internal/remarkable"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/models"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/remarkable"
 )
 
 // SyncDevice SSHes into the device, upserts every document it finds, and

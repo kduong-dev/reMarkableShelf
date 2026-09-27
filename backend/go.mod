@@ -1,4 +1,4 @@
-module github.com/kqvd/reMarkableShelf/backend
+module github.com/kduong-dev/reMarkableShelf/backend
 
 go 1.27.1
 

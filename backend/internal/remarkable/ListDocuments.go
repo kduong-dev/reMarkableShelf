@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/ansel1/merry"
-	"github.com/kqvd/reMarkableShelf/backend/internal/models"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/models"
 	"golang.org/x/crypto/ssh"
 )
 

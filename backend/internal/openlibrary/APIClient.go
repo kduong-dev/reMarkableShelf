@@ -13,7 +13,7 @@ const (
 	defaultSearchURL = "https://openlibrary.org/search.json"
 	// Open Library asks clients to identify themselves; identified requests
 	// get a higher rate limit than anonymous ones.
-	userAgent = "reMarkableShelf (+https://github.com/kqvd/reMarkableShelf)"
+	userAgent = "reMarkableShelf (+https://github.com/kduong-dev/reMarkableShelf)"
 )
 
 type APIClient struct {

@@ -2,7 +2,7 @@ package store
 
 import (
 	"github.com/ansel1/merry"
-	"github.com/kqvd/reMarkableShelf/backend/internal/models"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/models"
 )
 
 // UpsertDocuments replaces the known document set for a device with the

@@ -1,6 +1,6 @@
 package remarkable
 
-import "github.com/kqvd/reMarkableShelf/backend/internal/models"
+import "github.com/kduong-dev/reMarkableShelf/backend/internal/models"
 
 // Classify maps a document's raw .content "fileType" field to our FileType.
 //

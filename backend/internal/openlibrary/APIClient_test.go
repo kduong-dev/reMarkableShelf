@@ -22,6 +22,33 @@ func TestSearch(t *testing.T) {
 			})
 		})
 	})
+	Convey("Given an Open Library client", t, func() {
+		client := openlibrary.NewClient()
+		Convey("When searching with fewer than 3 characters around whitespace", func() {
+			results, err := client.Search("  ab  ")
+			Convey("Then it returns ErrQueryTooShort without making a request", func() {
+				So(results, ShouldBeNil)
+				So(merry.Is(err, openlibrary.ErrQueryTooShort), ShouldBeTrue)
+				So(merry.HTTPCode(err), ShouldEqual, http.StatusBadRequest)
+				So(merry.UserMessage(err), ShouldEqual, "search for at least 3 characters")
+			})
+		})
+	})
+	Convey("Given a fake Open Library server that rejects the query", t, func() {
+		server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+			responseWriter.WriteHeader(http.StatusUnprocessableEntity)
+		}))
+		Reset(server.Close)
+		client := openlibrary.NewClientWithBaseURL(server.URL)
+		Convey("When searching", func() {
+			results, err := client.Search("the")
+			Convey("Then it returns ErrQueryRejected as a client error", func() {
+				So(results, ShouldBeNil)
+				So(merry.Is(err, openlibrary.ErrQueryRejected), ShouldBeTrue)
+				So(merry.HTTPCode(err), ShouldEqual, http.StatusBadRequest)
+			})
+		})
+	})
 	Convey("Given a fake Open Library server returning a non-200 status", t, func() {
 		server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 			responseWriter.WriteHeader(http.StatusTooManyRequests)

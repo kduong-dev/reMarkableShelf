@@ -2,6 +2,9 @@ import { useState } from 'react'
 import { api } from '../api/client'
 import type { Book, BookSearchResult } from '../api/types'
 
+// Open Library's search refuses anything shorter.
+const minimumQueryLength = 3
+
 export function SearchModal({
   onClose,
   onAdded,
@@ -17,7 +20,10 @@ export function SearchModal({
 
   async function search(e: React.FormEvent) {
     e.preventDefault()
-    if (!query.trim()) return
+    if (query.trim().length < minimumQueryLength) {
+      setError(`Search for at least ${minimumQueryLength} characters`)
+      return
+    }
     setLoading(true)
     setError(null)
     try {

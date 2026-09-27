@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/ansel1/merry"
 )
@@ -14,6 +16,8 @@ const (
 	// Open Library asks clients to identify themselves; identified requests
 	// get a higher rate limit than anonymous ones.
 	userAgent = "reMarkableShelf (+https://github.com/kduong-dev/reMarkableShelf)"
+	// MinimumQueryLength is the shortest query Open Library's search accepts.
+	MinimumQueryLength = 3
 )
 
 type APIClient struct {
@@ -39,14 +43,23 @@ func NewClientWithBaseURL(baseURL string) *APIClient {
 }
 
 func (api *APIClient) Search(query string) ([]Result, error) {
+	query = strings.TrimSpace(query)
 	if query == "" {
 		return nil, ErrEmptyQuery
+	}
+	if utf8.RuneCountInString(query) < MinimumQueryLength {
+		return nil, merry.Here(ErrQueryTooShort)
 	}
 	response, err := api.get(api.createSearchURL(query))
 	if err != nil {
 		return nil, err
 	}
 	defer response.Body.Close()
+	// Open Library answers 422 for queries it refuses to run, such as a
+	// lone stop word like "the"; that is the user's query, not an outage.
+	if response.StatusCode == http.StatusUnprocessableEntity {
+		return nil, merry.Here(ErrQueryRejected).WithMessagef("open library rejected query %q", query)
+	}
 	var parsed searchResponse
 	if err := decodeJSON(response, &parsed); err != nil {
 		return nil, err

@@ -29,6 +29,9 @@ const genres: Array<{ label: string; value: string }> = [
   { label: 'Self-help', value: 'self-help' },
 ]
 
+// How many genres show before "More genres" reveals the rest.
+const featuredGenreCount = 7
+
 const sorts: Array<{ label: string; value: SearchSort }> = [
   { label: 'Relevance', value: '' },
   { label: 'Top rated', value: 'rating' },
@@ -81,6 +84,7 @@ export function SearchModal({
 }) {
   const [query, setQuery] = useState('')
   const [genre, setGenre] = useState('')
+  const [showAllGenres, setShowAllGenres] = useState(false)
   const [sort, setSort] = useState<SearchSort>('')
   const [language, setLanguage] = useState('')
   const [eraIndex, setEraIndex] = useState(0)
@@ -188,6 +192,11 @@ export function SearchModal({
     }
   }
 
+  // A selected genre stays visible even when the list is collapsed.
+  const visibleGenres =
+    showAllGenres || genres.findIndex((option) => option.value === genre) >= featuredGenreCount
+      ? genres
+      : genres.slice(0, featuredGenreCount)
   const visibleResults = canSearch ? results : []
   const current = searched === search
   const hasMore = canSearch && current && !loading && page * pageSize < total
@@ -219,7 +228,7 @@ export function SearchModal({
           aria-label="Search Open Library"
         />
         <div className="genre-chips" role="group" aria-label="Genre">
-          {genres.map((option) => (
+          {visibleGenres.map((option) => (
             <button
               key={option.value}
               className={genre === option.value ? 'chip active' : 'chip'}
@@ -229,6 +238,17 @@ export function SearchModal({
               {option.label}
             </button>
           ))}
+          {visibleGenres.length < genres.length ? (
+            <button className="chip chip-more" onClick={() => setShowAllGenres(true)}>
+              More genres
+            </button>
+          ) : (
+            showAllGenres && (
+              <button className="chip chip-more" onClick={() => setShowAllGenres(false)}>
+                Fewer genres
+              </button>
+            )
+          )}
         </div>
         <div className="search-filters">
           <div className="filter-tabs" role="group" aria-label="Sort">

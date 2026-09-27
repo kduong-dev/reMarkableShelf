@@ -421,13 +421,9 @@ a:hover {
 
 .genre-chips {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   margin-top: 12px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  padding-right: 32px;
-  /* Fades the last chips out so the row reads as scrollable. */
-  mask-image: linear-gradient(to right, #000 calc(100% - 48px), transparent);
 }
 
 .chip {
@@ -435,6 +431,11 @@ a:hover {
   padding: 5px 12px;
   font-size: 0.85rem;
   border-color: var(--divider-strong);
+}
+
+.chip-more {
+  border-style: dashed;
+  color: var(--text-muted);
 }
 
 .chip.active,

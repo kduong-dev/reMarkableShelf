@@ -10,8 +10,16 @@ import (
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/models"
 )
 
+// selectBooks reads every book column plus the cover path of one linked
+// tablet document with a synced cover, which the API serves at
+// /api/devices/{device}/documents/{uuid}/cover.
+const selectBooks = `SELECT id, title, author, isbn, cover_url, status, rating, source, open_library_id, page_count, current_page, progress_updated_at, progress_source, created_at, updated_at,
+	(SELECT '/api/devices/' || device_id || '/documents/' || uuid || '/cover' FROM remarkable_documents
+	 WHERE linked_book_id = books.id AND cover_image IS NOT NULL LIMIT 1)
+	FROM books`
+
 func (s *Store) ListBooks() ([]models.Book, error) {
-	rows, err := s.DB.Query(`SELECT id, title, author, isbn, cover_url, status, rating, source, open_library_id, page_count, current_page, progress_updated_at, progress_source, created_at, updated_at FROM books ORDER BY updated_at DESC`)
+	rows, err := s.DB.Query(selectBooks + ` ORDER BY updated_at DESC`)
 	if err != nil {
 		return nil, merry.Wrap(err)
 	}
@@ -29,7 +37,7 @@ func (s *Store) ListBooks() ([]models.Book, error) {
 }
 
 func (s *Store) GetBook(id string) (models.Book, error) {
-	row := s.DB.QueryRow(`SELECT id, title, author, isbn, cover_url, status, rating, source, open_library_id, page_count, current_page, progress_updated_at, progress_source, created_at, updated_at FROM books WHERE id = ?`, id)
+	row := s.DB.QueryRow(selectBooks+` WHERE id = ?`, id)
 	book, err := scanBook(row)
 	if err == sql.ErrNoRows {
 		return models.Book{}, merry.New("book not found").WithHTTPCode(http.StatusNotFound).WithUserMessagef("no book with id %q", id)
@@ -190,7 +198,9 @@ type rowScanner interface {
 
 func scanBook(row rowScanner) (models.Book, error) {
 	var b models.Book
-	err := row.Scan(&b.ID, &b.Title, &b.Author, &b.ISBN, &b.CoverURL, &b.Status, &b.Rating, &b.Source, &b.OpenLibraryID, &b.PageCount, &b.CurrentPage, &b.ProgressUpdatedAt, &b.ProgressSource, &b.CreatedAt, &b.UpdatedAt)
+	var tabletCoverURL sql.NullString
+	err := row.Scan(&b.ID, &b.Title, &b.Author, &b.ISBN, &b.CoverURL, &b.Status, &b.Rating, &b.Source, &b.OpenLibraryID, &b.PageCount, &b.CurrentPage, &b.ProgressUpdatedAt, &b.ProgressSource, &b.CreatedAt, &b.UpdatedAt, &tabletCoverURL)
+	b.TabletCoverURL = tabletCoverURL.String
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return models.Book{}, err

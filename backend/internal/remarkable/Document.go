@@ -6,9 +6,9 @@ import (
 	"time"
 )
 
-// xochitlDir is where documents live on the tablet's filesystem, per the
-// setup guide in the repo README.
-const xochitlDir = "/home/root/.local/share/remarkable/xochitl"
+// DefaultDocumentsDir is where documents live on the tablet's filesystem,
+// per the setup guide in the repo README.
+const DefaultDocumentsDir = "/home/root/.local/share/remarkable/xochitl"
 
 // metadata mirrors the fields we need from a <uuid>.metadata file.
 // LastOpened and LastModified are epoch millis as strings, with LastOpened
@@ -24,13 +24,38 @@ type metadata struct {
 // content mirrors the fields we need from a <uuid>.content file. fileType
 // is the signal that distinguishes an imported PDF/EPUB from a native
 // handwritten notebook — see Classify.go. documentMetadata holds the book's
-// own title and authors when the tablet could read them. Newer firmware (formatVersion 2)
-// records the open page in cPages rather than the metadata's lastOpenedPage.
+// own title and authors when the tablet could read them. formatVersion 1
+// lists page IDs in pages; formatVersion 2, which the tablet converts a
+// document to once it's opened, lists them in cPages along with the open
+// page. coverPageNumber is the page shown as the cover, -1 meaning the last
+// one opened.
 type content struct {
-	FileType         string           `json:"fileType"`
-	PageCount        int              `json:"pageCount"`
-	CPages           *cPages          `json:"cPages"`
-	DocumentMetadata documentMetadata `json:"documentMetadata"`
+	FileType         string            `json:"fileType"`
+	PageCount        int               `json:"pageCount"`
+	Pages            []json.RawMessage `json:"pages"`
+	CPages           *cPages           `json:"cPages"`
+	CoverPageNumber  *int              `json:"coverPageNumber"`
+	DocumentMetadata documentMetadata  `json:"documentMetadata"`
+}
+
+// pageIDs lists the document's pages in order, leaving out deleted ones.
+func (c content) pageIDs() []string {
+	var ids []string
+	if c.CPages != nil {
+		for _, page := range c.CPages.Pages {
+			if !page.deleted() {
+				ids = append(ids, page.ID)
+			}
+		}
+		return ids
+	}
+	for _, raw := range c.Pages {
+		var id string
+		if json.Unmarshal(raw, &id) == nil {
+			ids = append(ids, id)
+		}
+	}
+	return ids
 }
 
 // documentMetadata is what the tablet read from the file itself, usually
@@ -100,22 +125,15 @@ func documentPosition(meta metadata, c content) (position, bool) {
 	if !opened {
 		return position{}, false
 	}
-	var livePages []cPage
-	if c.CPages != nil {
-		for _, page := range c.CPages.Pages {
-			if !page.deleted() {
-				livePages = append(livePages, page)
-			}
-		}
-	}
+	pageIDs := c.pageIDs()
 	pageCount := c.PageCount
 	if pageCount == 0 {
-		pageCount = len(livePages)
+		pageCount = len(pageIDs)
 	}
 	currentPage := 0
 	if c.CPages != nil && c.CPages.LastOpened.Value != "" {
-		for index, page := range livePages {
-			if page.ID == c.CPages.LastOpened.Value {
+		for index, id := range pageIDs {
+			if id == c.CPages.LastOpened.Value {
 				currentPage = index + 1
 				break
 			}
@@ -132,4 +150,26 @@ func documentPosition(meta metadata, c content) (position, bool) {
 		updatedAt = modifiedAt
 	}
 	return position{currentPage: currentPage, pageCount: pageCount, updatedAt: updatedAt}, true
+}
+
+// coverPageID is the ID of the page the tablet shows as the document's
+// cover, whose thumbnail is <uuid>.thumbnails/<id>.png, or "" if unknown.
+func coverPageID(meta metadata, c content) string {
+	pageIDs := c.pageIDs()
+	coverPage := 0
+	if c.CoverPageNumber != nil {
+		coverPage = *c.CoverPageNumber
+	}
+	if coverPage == -1 {
+		position, ok := documentPosition(meta, c)
+		if !ok {
+			coverPage = 0
+		} else {
+			coverPage = position.currentPage - 1
+		}
+	}
+	if coverPage < 0 || coverPage >= len(pageIDs) {
+		return ""
+	}
+	return pageIDs[coverPage]
 }

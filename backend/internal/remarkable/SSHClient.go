@@ -3,6 +3,7 @@ package remarkable
 import (
 	"bytes"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -16,7 +17,38 @@ type SSHClient struct {
 }
 
 func NewSSHClient(config Config) *SSHClient {
+	if config.DocumentsDir == "" {
+		config.DocumentsDir = DefaultDocumentsDir
+	}
 	return &SSHClient{config: config}
+}
+
+// idPattern matches the UUIDs the tablet names documents and pages with,
+// which cover paths are built from, so nothing else reaches the shell.
+var idPattern = regexp.MustCompile(`^[0-9a-f-]+$`)
+
+func (client *SSHClient) CoverImages(host string, requests []CoverRequest) (map[string][]byte, error) {
+	images := make(map[string][]byte, len(requests))
+	if len(requests) == 0 {
+		return images, nil
+	}
+	connection, err := client.dialKey(host)
+	if err != nil {
+		return nil, err
+	}
+	defer connection.Close()
+	for _, request := range requests {
+		if !idPattern.MatchString(request.DocumentUUID) || !idPattern.MatchString(request.PageID) {
+			continue
+		}
+		path := fmt.Sprintf("%s/%s.thumbnails/%s.png", client.config.DocumentsDir, request.DocumentUUID, request.PageID)
+		output, err := run(connection, fmt.Sprintf("cat '%s'", path))
+		if err != nil {
+			continue // not rendered yet; the next sync tries again
+		}
+		images[request.DocumentUUID] = []byte(output)
+	}
+	return images, nil
 }
 
 // installKeyScript adds a key line to authorized_keys unless it's already

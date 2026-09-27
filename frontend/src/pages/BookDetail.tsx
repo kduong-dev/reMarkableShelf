@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { bookFromResult } from '../bookFromResult'
+import { bookCover } from '../bookCover'
 import { cleanFileName } from '../bookSearchQuery'
 import { Bookmark } from '../components/Bookmark'
 import { SearchModal } from '../components/SearchModal'
@@ -53,6 +54,11 @@ export function BookDetail() {
     }
   }
 
+  async function switchToTabletCover() {
+    if (!book?.tabletCoverUrl) return
+    setBook(await api.updateBook(book.id, { coverUrl: book.tabletCoverUrl }))
+  }
+
   async function remove() {
     if (!book) return
     if (!confirm(`Remove "${book.title}" from your collection?`)) return
@@ -69,8 +75,8 @@ export function BookDetail() {
         &larr; Library
       </Link>
       <div className="book-detail-header">
-        {book.coverUrl ? (
-          <img className="book-detail-cover" src={book.coverUrl} alt="" />
+        {bookCover(book) ? (
+          <img className="book-detail-cover" src={bookCover(book)} alt="" />
         ) : (
           <div className="book-detail-cover book-detail-cover-empty">{book.title.slice(0, 1)}</div>
         )}
@@ -116,6 +122,11 @@ export function BookDetail() {
               <button className="text-button" onClick={() => setMatching(true)}>
                 {book.openLibraryId ? 'Change match' : 'Find on Open Library'}
               </button>
+              {book.tabletCoverUrl && book.coverUrl && book.coverUrl !== book.tabletCoverUrl && (
+                <button className="text-button" onClick={switchToTabletCover}>
+                  Use tablet cover
+                </button>
+              )}
             </div>
           )}
           <div className="status-picker">

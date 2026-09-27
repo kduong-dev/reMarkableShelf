@@ -42,6 +42,8 @@ CREATE TABLE IF NOT EXISTS remarkable_documents (
 	book_title      TEXT NOT NULL DEFAULT '',
 	book_author     TEXT NOT NULL DEFAULT '',
 	auto_link_dismissed INTEGER NOT NULL DEFAULT 0,
+	cover_image     BLOB,
+	cover_checked_at DATETIME,
 	PRIMARY KEY (uuid, device_id)
 );
 
@@ -66,6 +68,8 @@ var addedColumns = []struct {
 	{"remarkable_documents", "book_title", "TEXT NOT NULL DEFAULT ''"},
 	{"remarkable_documents", "book_author", "TEXT NOT NULL DEFAULT ''"},
 	{"remarkable_documents", "auto_link_dismissed", "INTEGER NOT NULL DEFAULT 0"},
+	{"remarkable_documents", "cover_image", "BLOB"},
+	{"remarkable_documents", "cover_checked_at", "DATETIME"},
 }
 
 func (s *Store) migrate() error {

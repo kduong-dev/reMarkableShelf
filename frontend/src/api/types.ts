@@ -15,6 +15,7 @@ export interface Book {
   currentPage?: number
   progressUpdatedAt?: string
   progressSource?: 'app' | 'remarkable'
+  tabletCoverUrl?: string
   createdAt: string
   updatedAt: string
 }
@@ -41,6 +42,7 @@ export interface RemarkableDocument {
   positionUpdatedAt?: string
   bookTitle?: string
   bookAuthor?: string
+  hasCover?: boolean
 }
 
 export interface BookSearchResult {

@@ -14,17 +14,30 @@ import (
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/store"
 )
 
-// fakeTablet serves whatever documents the test has put on it, failing
-// with listErr or pairErr when set.
+// fakeTablet serves whatever documents and covers the test has put on it,
+// failing with listErr or pairErr when set, and records cover requests.
 type fakeTablet struct {
-	documents  []models.RemarkableDocument
-	listErr    error
-	pairErr    error
-	pairedWith string
+	covers        map[string][]byte
+	coverRequests []remarkable.CoverRequest
+	documents     []models.RemarkableDocument
+	listErr       error
+	pairErr       error
+	pairedWith    string
 }
 
 func (tablet *fakeTablet) ListDocuments(host string) ([]models.RemarkableDocument, error) {
 	return tablet.documents, tablet.listErr
+}
+
+func (tablet *fakeTablet) CoverImages(host string, requests []remarkable.CoverRequest) (map[string][]byte, error) {
+	tablet.coverRequests = append(tablet.coverRequests, requests...)
+	images := make(map[string][]byte)
+	for _, request := range requests {
+		if image, ok := tablet.covers[request.DocumentUUID]; ok {
+			images[request.DocumentUUID] = image
+		}
+	}
+	return images, nil
 }
 
 func (tablet *fakeTablet) Pair(host, password string) error {
@@ -201,6 +214,86 @@ func TestUnlinkDocument(t *testing.T) {
 			Convey("Then the user can still link it by hand", func() {
 				So(syncer.LinkDocument(device.ID, "document-1", book.ID), ShouldBeNil)
 				So(*linkedTo(), ShouldEqual, book.ID)
+			})
+		})
+	})
+}
+
+func TestCovers(t *testing.T) {
+	Convey("Given a tablet with a PDF and a notebook whose covers are rendered", t, func() {
+		opened, err := store.Open(filepath.Join(t.TempDir(), "books.db"))
+		So(err, ShouldBeNil)
+		Reset(func() { _ = opened.Close() })
+		device, err := opened.CreateDevice(models.Device{Name: "Paper Pro", Host: "10.0.0.5"})
+		So(err, ShouldBeNil)
+		modifiedAt := time.Now().UTC().Add(-time.Hour).Truncate(time.Millisecond)
+		pdf := models.RemarkableDocument{UUID: "document-1", Title: "Dune", FileType: models.FileTypePDF, LastModified: modifiedAt, CoverPageID: "page-1"}
+		notebook := models.RemarkableDocument{UUID: "notebook-1", Title: "Notes", FileType: models.FileTypeNotebook, LastModified: modifiedAt, CoverPageID: "page-2"}
+		tablet := &fakeTablet{
+			documents: []models.RemarkableDocument{pdf, notebook},
+			covers:    map[string][]byte{"document-1": []byte("dune cover"), "notebook-1": []byte("notes cover")},
+		}
+		syncer := devicesync.NewSyncer(opened, tablet)
+		book, err := opened.CreateBook(models.Book{Title: "Dune"})
+		So(err, ShouldBeNil)
+		_, err = syncer.SyncDevice(device.ID)
+		So(err, ShouldBeNil)
+		Convey("When the first sync runs", func() {
+			Convey("Then only the PDF's cover is fetched and stored", func() {
+				So(tablet.coverRequests, ShouldResemble, []remarkable.CoverRequest{{DocumentUUID: "document-1", PageID: "page-1"}})
+				image, err := opened.GetDocumentCover(device.ID, "document-1")
+				So(err, ShouldBeNil)
+				So(string(image), ShouldEqual, "dune cover")
+			})
+			Convey("Then the book it auto-linked to offers the tablet's cover", func() {
+				linked, err := opened.GetBook(book.ID)
+				So(err, ShouldBeNil)
+				So(linked.TabletCoverURL, ShouldEqual, "/api/devices/"+device.ID+"/documents/document-1/cover")
+			})
+		})
+		Convey("When syncing again with the document unchanged", func() {
+			tablet.coverRequests = nil
+			_, err := syncer.SyncDevice(device.ID)
+			Convey("Then the cover isn't fetched again", func() {
+				So(err, ShouldBeNil)
+				So(tablet.coverRequests, ShouldBeEmpty)
+			})
+		})
+		Convey("When the document changes and its cover with it", func() {
+			tablet.coverRequests = nil
+			pdf.LastModified = modifiedAt.Add(time.Minute)
+			tablet.documents = []models.RemarkableDocument{pdf}
+			tablet.covers["document-1"] = []byte("new cover")
+			_, err := syncer.SyncDevice(device.ID)
+			Convey("Then the new cover replaces the old", func() {
+				So(err, ShouldBeNil)
+				So(tablet.coverRequests, ShouldHaveLength, 1)
+				image, err := opened.GetDocumentCover(device.ID, "document-1")
+				So(err, ShouldBeNil)
+				So(string(image), ShouldEqual, "new cover")
+			})
+		})
+	})
+	Convey("Given a PDF whose cover the tablet hasn't rendered yet", t, func() {
+		opened, err := store.Open(filepath.Join(t.TempDir(), "books.db"))
+		So(err, ShouldBeNil)
+		Reset(func() { _ = opened.Close() })
+		device, err := opened.CreateDevice(models.Device{Name: "Paper Pro", Host: "10.0.0.5"})
+		So(err, ShouldBeNil)
+		tablet := &fakeTablet{documents: []models.RemarkableDocument{
+			{UUID: "document-1", Title: "Dune", FileType: models.FileTypePDF, LastModified: time.Now().UTC(), CoverPageID: "page-1"},
+		}}
+		syncer := devicesync.NewSyncer(opened, tablet)
+		_, err = syncer.SyncDevice(device.ID)
+		So(err, ShouldBeNil)
+		Convey("When it's rendered before the next sync", func() {
+			tablet.covers = map[string][]byte{"document-1": []byte("dune cover")}
+			_, err := syncer.SyncDevice(device.ID)
+			Convey("Then that sync picks it up", func() {
+				So(err, ShouldBeNil)
+				image, err := opened.GetDocumentCover(device.ID, "document-1")
+				So(err, ShouldBeNil)
+				So(string(image), ShouldEqual, "dune cover")
 			})
 		})
 	})

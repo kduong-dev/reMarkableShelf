@@ -23,7 +23,10 @@ const (
 // BookTitle and BookAuthor are read from the file itself when the tablet
 // could (usually EPUBs), whereas Title is its name in the tablet's library.
 // AutoLinkDismissed records that the user unlinked the document, so sync
-// doesn't link it again by title.
+// doesn't link it again by title. CoverPageID is the page the tablet shows
+// as its cover, and HasCover whether that page's thumbnail has been synced;
+// CoverCheckedAt is the document's LastModified when the cover was last
+// fetched, so it's fetched again only once the document changes.
 type RemarkableDocument struct {
 	UUID              string     `json:"uuid"`
 	DeviceID          string     `json:"deviceId"`
@@ -37,4 +40,7 @@ type RemarkableDocument struct {
 	BookTitle         string     `json:"bookTitle,omitempty"`
 	BookAuthor        string     `json:"bookAuthor,omitempty"`
 	AutoLinkDismissed bool       `json:"-"`
+	CoverPageID       string     `json:"-"`
+	HasCover          bool       `json:"hasCover"`
+	CoverCheckedAt    *time.Time `json:"-"`
 }

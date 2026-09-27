@@ -1,7 +1,9 @@
 package store
 
 import (
+	"database/sql"
 	"net/http"
+	"time"
 
 	"github.com/ansel1/merry"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/models"
@@ -40,7 +42,7 @@ func (s *Store) UpsertDocuments(deviceID string, docs []models.RemarkableDocumen
 
 func (s *Store) ListDocumentsByDevice(deviceID string) ([]models.RemarkableDocument, error) {
 	rows, err := s.DB.Query(
-		`SELECT uuid, device_id, title, file_type, last_modified, linked_book_id, current_page, page_count, position_updated_at, book_title, book_author, auto_link_dismissed
+		`SELECT uuid, device_id, title, file_type, last_modified, linked_book_id, current_page, page_count, position_updated_at, book_title, book_author, auto_link_dismissed, cover_image IS NOT NULL, cover_checked_at
 		 FROM remarkable_documents WHERE device_id = ? ORDER BY last_modified DESC`,
 		deviceID,
 	)
@@ -52,7 +54,7 @@ func (s *Store) ListDocumentsByDevice(deviceID string) ([]models.RemarkableDocum
 	docs := []models.RemarkableDocument{}
 	for rows.Next() {
 		var d models.RemarkableDocument
-		if err := rows.Scan(&d.UUID, &d.DeviceID, &d.Title, &d.FileType, &d.LastModified, &d.LinkedBookID, &d.CurrentPage, &d.PageCount, &d.PositionUpdatedAt, &d.BookTitle, &d.BookAuthor, &d.AutoLinkDismissed); err != nil {
+		if err := rows.Scan(&d.UUID, &d.DeviceID, &d.Title, &d.FileType, &d.LastModified, &d.LinkedBookID, &d.CurrentPage, &d.PageCount, &d.PositionUpdatedAt, &d.BookTitle, &d.BookAuthor, &d.AutoLinkDismissed, &d.HasCover, &d.CoverCheckedAt); err != nil {
 			return nil, merry.Wrap(err)
 		}
 		docs = append(docs, d)
@@ -82,4 +84,27 @@ func (s *Store) UnlinkDocument(deviceID, docUUID string) error {
 		return merry.New("document not found").WithHTTPCode(http.StatusNotFound).WithUserMessagef("no document %q on that device", docUUID)
 	}
 	return nil
+}
+
+// SetDocumentCover stores a document's cover as fetched when the document
+// was last modified at checkedAt. A nil image records the check but keeps
+// any cover already stored.
+func (s *Store) SetDocumentCover(deviceID, docUUID string, image []byte, checkedAt time.Time) error {
+	_, err := s.DB.Exec(
+		`UPDATE remarkable_documents SET cover_image = COALESCE(?, cover_image), cover_checked_at = ? WHERE device_id = ? AND uuid = ?`,
+		image, checkedAt, deviceID, docUUID,
+	)
+	return merry.Wrap(err)
+}
+
+func (s *Store) GetDocumentCover(deviceID, docUUID string) ([]byte, error) {
+	var image []byte
+	err := s.DB.QueryRow(
+		`SELECT cover_image FROM remarkable_documents WHERE device_id = ? AND uuid = ? AND cover_image IS NOT NULL`,
+		deviceID, docUUID,
+	).Scan(&image)
+	if err == sql.ErrNoRows {
+		return nil, merry.New("cover not found").WithHTTPCode(http.StatusNotFound).WithUserMessage("that document has no synced cover")
+	}
+	return image, merry.Wrap(err)
 }

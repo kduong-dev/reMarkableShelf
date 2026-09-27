@@ -194,6 +194,11 @@ export function Sync() {
           <ul className="doc-list">
             {bookDocs.map((doc) => (
               <li key={doc.uuid} className="doc-row">
+                <span className="doc-cover">
+                  {doc.hasCover && (
+                    <img src={`/api/devices/${selected}/documents/${doc.uuid}/cover`} alt="" loading="lazy" />
+                  )}
+                </span>
                 <span className="doc-title">{doc.title}</span>
                 {doc.currentPage && doc.pageCount && (
                   <span className="doc-position">
@@ -243,6 +248,11 @@ export function Sync() {
           <ul className="doc-list">
             {noteDocs.map((doc) => (
               <li key={doc.uuid} className="doc-row">
+                <span className="doc-cover">
+                  {doc.hasCover && (
+                    <img src={`/api/devices/${selected}/documents/${doc.uuid}/cover`} alt="" loading="lazy" />
+                  )}
+                </span>
                 <span className="doc-title">{doc.title}</span>
                 <span className="badge badge-filetype">notebook</span>
               </li>

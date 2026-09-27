@@ -29,6 +29,7 @@ const (
 // synced PDF/EPUB from a tablet couldn't be matched to an existing entry
 // (SourceRemarkable). ProgressUpdatedAt and ProgressSource record when the
 // bookmark last moved and whether the app or a tablet sync moved it.
+// TabletCoverURL serves the cover of a linked tablet document, if synced.
 type Book struct {
 	ID                string         `json:"id"`
 	Title             string         `json:"title"`
@@ -43,6 +44,7 @@ type Book struct {
 	CurrentPage       *int           `json:"currentPage,omitempty"`
 	ProgressUpdatedAt *time.Time     `json:"progressUpdatedAt,omitempty"`
 	ProgressSource    ProgressSource `json:"progressSource,omitempty"`
+	TabletCoverURL    string         `json:"tabletCoverUrl,omitempty"`
 	CreatedAt         time.Time      `json:"createdAt"`
 	UpdatedAt         time.Time      `json:"updatedAt"`
 }

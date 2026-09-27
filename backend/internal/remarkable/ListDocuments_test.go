@@ -96,6 +96,35 @@ func TestParseListOutput(t *testing.T) {
 			})
 		})
 	})
+	Convey("Given documents whose cover pages differ", t, func() {
+		output := record("first-page", metadataOpenedAt("0", 0), formatVersion1Content) +
+			record("deleted-first", `{"type": "DocumentType", "visibleName": "a.epub"}`, `{
+				"fileType": "epub",
+				"cPages": {"pages": [{"id": "gone", "deleted": {"value": 1}}, {"id": "page-b"}]}
+			}`) +
+			record("last-opened", `{"type": "DocumentType", "visibleName": "b.epub", "lastOpened": "1759000000000"}`, `{
+				"fileType": "epub",
+				"coverPageNumber": -1,
+				"cPages": {"lastOpened": {"value": "page-y"}, "pages": [{"id": "page-x"}, {"id": "page-y"}]}
+			}`)
+		Convey("When parsing the listing", func() {
+			documents, err := remarkable.ParseListOutput(output)
+			So(err, ShouldBeNil)
+			coverByUUID := map[string]string{}
+			for _, document := range documents {
+				coverByUUID[document.UUID] = document.CoverPageID
+			}
+			Convey("Then a formatVersion 1 document's cover is its first listed page", func() {
+				So(coverByUUID["first-page"], ShouldEqual, "f3df5538-f65e-44f2-a83a-01f4cd91289f")
+			})
+			Convey("Then a formatVersion 2 document skips deleted pages", func() {
+				So(coverByUUID["deleted-first"], ShouldEqual, "page-b")
+			})
+			Convey("Then coverPageNumber -1 means the page last opened", func() {
+				So(coverByUUID["last-opened"], ShouldEqual, "page-y")
+			})
+		})
+	})
 	Convey("Given a folder among the documents", t, func() {
 		output := record("folder", `{"type": "CollectionType", "visibleName": "Books"}`, "") +
 			record("086daeda", metadataOpenedAt("0", 0), formatVersion1Content)

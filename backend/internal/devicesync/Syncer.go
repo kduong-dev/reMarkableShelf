@@ -55,6 +55,9 @@ func (syncer *Syncer) SyncDevice(deviceID string) ([]models.RemarkableDocument, 
 	if err := syncer.autoLinkDocuments(device.ID); err != nil {
 		return nil, err
 	}
+	if err := syncer.fetchCovers(device, documents); err != nil {
+		return nil, err
+	}
 	syncedDocuments, err := syncer.store.ListDocumentsByDevice(device.ID)
 	if err != nil {
 		return nil, err
@@ -160,6 +163,45 @@ func (syncer *Syncer) LinkDocument(deviceID, documentUUID, bookID string) error 
 	for _, document := range documents {
 		if document.UUID == documentUUID {
 			return syncer.applyTabletProgress([]models.RemarkableDocument{document})
+		}
+	}
+	return nil
+}
+
+// fetchCovers copies the cover thumbnail of each pdf/epub document that
+// has none yet or has changed since its cover was fetched. The tablet
+// renders thumbnails lazily, so a missing one is retried on later syncs.
+// Covers are a nicety, so failing to fetch them is logged, not returned.
+func (syncer *Syncer) fetchCovers(device models.Device, listed []models.RemarkableDocument) error {
+	stored, err := syncer.store.ListDocumentsByDevice(device.ID)
+	if err != nil {
+		return err
+	}
+	storedByUUID := make(map[string]models.RemarkableDocument, len(stored))
+	for _, document := range stored {
+		storedByUUID[document.UUID] = document
+	}
+	var requests []remarkable.CoverRequest
+	modifiedAt := make(map[string]time.Time)
+	for _, document := range listed {
+		if document.FileType == models.FileTypeNotebook || document.CoverPageID == "" {
+			continue
+		}
+		current := storedByUUID[document.UUID]
+		if current.HasCover && current.CoverCheckedAt != nil && !document.LastModified.After(*current.CoverCheckedAt) {
+			continue
+		}
+		requests = append(requests, remarkable.CoverRequest{DocumentUUID: document.UUID, PageID: document.CoverPageID})
+		modifiedAt[document.UUID] = document.LastModified
+	}
+	images, err := syncer.remarkable.CoverImages(device.Host, requests)
+	if err != nil {
+		logx.Warnf("fetching covers from %s (%s): %v", device.Name, device.Host, err)
+		return nil
+	}
+	for _, request := range requests {
+		if err := syncer.store.SetDocumentCover(device.ID, request.DocumentUUID, images[request.DocumentUUID], modifiedAt[request.DocumentUUID]); err != nil {
+			return err
 		}
 	}
 	return nil

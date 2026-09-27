@@ -111,9 +111,18 @@ func (tablet *fakeTablet) authorizedKeys() string {
 }
 
 func newClient(t *testing.T, port string) *remarkable.SSHClient {
+	return newClientFor(t, port, "")
+}
+
+func newClientFor(t *testing.T, port, documentsDir string) *remarkable.SSHClient {
 	signer, err := remarkable.LoadOrCreateSigner(filepath.Join(t.TempDir(), "id_ed25519"))
 	So(err, ShouldBeNil)
-	return remarkable.NewSSHClient(remarkable.Config{User: "root", Port: port, Signer: signer})
+	return remarkable.NewSSHClient(remarkable.Config{User: "root", Port: port, Signer: signer, DocumentsDir: documentsDir})
+}
+
+func writeFile(path, contents string) {
+	So(os.MkdirAll(filepath.Dir(path), 0o755), ShouldBeNil)
+	So(os.WriteFile(path, []byte(contents), 0o644), ShouldBeNil)
 }
 
 func TestPair(t *testing.T) {
@@ -167,6 +176,47 @@ func TestPair(t *testing.T) {
 			Convey("Then it returns ErrTabletUnreachable", func() {
 				So(merry.Is(err, remarkable.ErrTabletUnreachable), ShouldBeTrue)
 				So(merry.UserMessage(err), ShouldContainSubstring, "may be asleep")
+			})
+		})
+	})
+}
+
+func TestDocumentsAndCovers(t *testing.T) {
+	Convey("Given a paired tablet holding a PDF whose first page has a thumbnail", t, func() {
+		tablet := startFakeTablet(t, "secret")
+		documentsDir := filepath.Join(tablet.home, "xochitl")
+		uuid := "086daeda-1412-40d6-9bad-7aa1f9968857"
+		writeFile(filepath.Join(documentsDir, uuid+".metadata"), `{"type": "DocumentType", "visibleName": "Dale Carnegie - How to Win Friends.pdf", "lastOpened": "0"}`)
+		writeFile(filepath.Join(documentsDir, uuid+".content"), `{"fileType": "pdf", "coverPageNumber": 0, "pageCount": 2, "pages": ["f3df5538-f65e-44f2-a83a-01f4cd91289f", "39960184-8156-40ff-a4a9-110d3e2f36ef"]}`)
+		writeFile(filepath.Join(documentsDir, uuid+".thumbnails", "f3df5538-f65e-44f2-a83a-01f4cd91289f.png"), "\x89PNG cover bytes")
+		client := newClientFor(t, tablet.port, documentsDir)
+		So(client.Pair(tablet.host, "secret"), ShouldBeNil)
+		Convey("When listing its documents", func() {
+			documents, err := client.ListDocuments(tablet.host)
+			Convey("Then the PDF's cover page is its first page", func() {
+				So(err, ShouldBeNil)
+				So(documents, ShouldHaveLength, 1)
+				So(documents[0].CoverPageID, ShouldEqual, "f3df5538-f65e-44f2-a83a-01f4cd91289f")
+			})
+		})
+		Convey("When fetching its cover and one for a page with no thumbnail", func() {
+			images, err := client.CoverImages(tablet.host, []remarkable.CoverRequest{
+				{DocumentUUID: uuid, PageID: "f3df5538-f65e-44f2-a83a-01f4cd91289f"},
+				{DocumentUUID: "5b1c0000-0000-0000-0000-000000000000", PageID: "a1b2c3d4-0000-0000-0000-000000000000"},
+			})
+			Convey("Then it returns the thumbnail's bytes and leaves out the missing one", func() {
+				So(err, ShouldBeNil)
+				So(string(images[uuid]), ShouldEqual, "\x89PNG cover bytes")
+				So(images, ShouldHaveLength, 1)
+			})
+		})
+		Convey("When a cover request names a path outside the thumbnails", func() {
+			images, err := client.CoverImages(tablet.host, []remarkable.CoverRequest{
+				{DocumentUUID: uuid, PageID: "../../../etc/passwd"},
+			})
+			Convey("Then it's skipped without reaching the shell", func() {
+				So(err, ShouldBeNil)
+				So(images, ShouldBeEmpty)
 			})
 		})
 	})

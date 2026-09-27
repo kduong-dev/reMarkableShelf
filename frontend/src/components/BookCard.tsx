@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import type { Book } from '../api/types'
+import { bookCover } from '../bookCover'
 import { progressPercent } from '../progress'
 
 const statusLabel: Record<Book['status'], string> = {
@@ -13,8 +14,8 @@ export function BookCard({ book }: { book: Book }) {
   return (
     <Link to={`/books/${book.id}`} className="book-card">
       <div className="book-card-cover">
-        {book.coverUrl ? (
-          <img src={book.coverUrl} alt="" />
+        {bookCover(book) ? (
+          <img src={bookCover(book)} alt="" />
         ) : (
           <span className="book-card-cover-fallback">{book.title.slice(0, 1)}</span>
         )}

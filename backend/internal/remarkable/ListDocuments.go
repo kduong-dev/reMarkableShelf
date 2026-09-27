@@ -17,16 +17,18 @@ const (
 	sepRecordEnd   = "\x04"
 )
 
-// listScript prints one such record per document (not folder) in the
-// xochitl store, so a single SSH round trip is enough to fetch everything
-// needed to classify and title every document on the tablet.
-const listScript = `cd '` + xochitlDir + `' && for f in *.metadata; do
+// listScript, run in the documents directory, prints one such record per
+// document (not folder) in the xochitl store, so a single SSH round trip is
+// enough to fetch everything needed to classify and title every document on
+// the tablet. The separators are printed with octal escapes, which POSIX
+// printf guarantees, unlike \x hex escapes.
+const listScript = `for f in *.metadata; do
   uuid="${f%.metadata}"
-  printf '\x01%s\x02' "$uuid"
+  printf '\001%s\002' "$uuid"
   cat "$f"
-  printf '\x03'
+  printf '\003'
   [ -f "$uuid.content" ] && cat "$uuid.content"
-  printf '\x04'
+  printf '\004'
 done`
 
 // ListDocuments SSHes into the given host and returns every document
@@ -39,7 +41,7 @@ func (client *SSHClient) ListDocuments(host string) ([]models.RemarkableDocument
 		return nil, err
 	}
 	defer connection.Close()
-	output, err := run(connection, listScript)
+	output, err := run(connection, "cd '"+client.config.DocumentsDir+"' && "+listScript)
 	if err != nil {
 		return nil, merry.Wrap(err).WithUserMessage("listing the tablet's documents")
 	}
@@ -94,6 +96,7 @@ func ParseListOutput(output string) ([]models.RemarkableDocument, error) {
 			FileType:     Classify(c.FileType),
 			LastModified: lastModified,
 			BookTitle:    strings.TrimSpace(c.DocumentMetadata.Title),
+			CoverPageID:  coverPageID(meta, c),
 		}
 		if len(c.DocumentMetadata.Authors) > 0 {
 			document.BookAuthor = strings.TrimSpace(c.DocumentMetadata.Authors[0])

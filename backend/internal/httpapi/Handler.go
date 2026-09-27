@@ -5,21 +5,21 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/kduong-dev/goutil/httpx"
-	"github.com/kqvd/reMarkableShelf/backend/internal/googlebooks"
+	"github.com/kqvd/reMarkableShelf/backend/internal/openlibrary"
 	"github.com/kqvd/reMarkableShelf/backend/internal/remarkable"
 	"github.com/kqvd/reMarkableShelf/backend/internal/store"
 )
 
 type NewHandlerInput struct {
 	Store            *store.Store
-	GoogleBooks      googlebooks.API
+	OpenLibrary      openlibrary.API
 	RemarkableConfig remarkable.Config
 }
 
 func NewHandler(input NewHandlerInput) http.Handler {
 	api := &API{
 		store:            input.Store,
-		googleBooks:      input.GoogleBooks,
+		openLibrary:      input.OpenLibrary,
 		remarkableConfig: input.RemarkableConfig,
 	}
 	router := mux.NewRouter().StrictSlash(true)

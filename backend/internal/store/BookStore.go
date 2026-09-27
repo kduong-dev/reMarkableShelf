@@ -11,7 +11,7 @@ import (
 )
 
 func (s *Store) ListBooks() ([]models.Book, error) {
-	rows, err := s.DB.Query(`SELECT id, title, author, isbn, cover_url, status, rating, source, google_books_id, created_at, updated_at FROM books ORDER BY updated_at DESC`)
+	rows, err := s.DB.Query(`SELECT id, title, author, isbn, cover_url, status, rating, source, open_library_id, created_at, updated_at FROM books ORDER BY updated_at DESC`)
 	if err != nil {
 		return nil, merry.Wrap(err)
 	}
@@ -29,7 +29,7 @@ func (s *Store) ListBooks() ([]models.Book, error) {
 }
 
 func (s *Store) GetBook(id string) (models.Book, error) {
-	row := s.DB.QueryRow(`SELECT id, title, author, isbn, cover_url, status, rating, source, google_books_id, created_at, updated_at FROM books WHERE id = ?`, id)
+	row := s.DB.QueryRow(`SELECT id, title, author, isbn, cover_url, status, rating, source, open_library_id, created_at, updated_at FROM books WHERE id = ?`, id)
 	book, err := scanBook(row)
 	if err == sql.ErrNoRows {
 		return models.Book{}, merry.New("book not found").WithHTTPCode(http.StatusNotFound).WithUserMessagef("no book with id %q", id)
@@ -52,9 +52,9 @@ func (s *Store) CreateBook(book models.Book) (models.Book, error) {
 	book.CreatedAt, book.UpdatedAt = now, now
 
 	_, err := s.DB.Exec(
-		`INSERT INTO books (id, title, author, isbn, cover_url, status, rating, source, google_books_id, created_at, updated_at)
+		`INSERT INTO books (id, title, author, isbn, cover_url, status, rating, source, open_library_id, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		book.ID, book.Title, book.Author, book.ISBN, book.CoverURL, book.Status, book.Rating, book.Source, book.GoogleBooksID, book.CreatedAt, book.UpdatedAt,
+		book.ID, book.Title, book.Author, book.ISBN, book.CoverURL, book.Status, book.Rating, book.Source, book.OpenLibraryID, book.CreatedAt, book.UpdatedAt,
 	)
 	if err != nil {
 		return models.Book{}, merry.Wrap(err).WithUserMessage("creating book")
@@ -112,7 +112,7 @@ type rowScanner interface {
 
 func scanBook(row rowScanner) (models.Book, error) {
 	var b models.Book
-	err := row.Scan(&b.ID, &b.Title, &b.Author, &b.ISBN, &b.CoverURL, &b.Status, &b.Rating, &b.Source, &b.GoogleBooksID, &b.CreatedAt, &b.UpdatedAt)
+	err := row.Scan(&b.ID, &b.Title, &b.Author, &b.ISBN, &b.CoverURL, &b.Status, &b.Rating, &b.Source, &b.OpenLibraryID, &b.CreatedAt, &b.UpdatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return models.Book{}, err

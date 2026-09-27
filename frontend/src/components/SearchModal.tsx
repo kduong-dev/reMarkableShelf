@@ -30,14 +30,14 @@ export function SearchModal({
   }
 
   async function add(result: BookSearchResult) {
-    setAddingId(result.googleBooksId)
+    setAddingId(result.openLibraryId)
     try {
       const book = await api.createBook({
         title: result.title,
         author: result.author,
         isbn: result.isbn,
         coverUrl: result.coverUrl,
-        googleBooksId: result.googleBooksId,
+        openLibraryId: result.openLibraryId,
         source: 'manual',
       })
       onAdded(book)
@@ -71,7 +71,7 @@ export function SearchModal({
         {error && <p className="error">{error}</p>}
         <ul className="search-results">
           {results.map((result) => (
-            <li key={result.googleBooksId} className="search-result">
+            <li key={result.openLibraryId} className="search-result">
               <div className="search-result-cover">
                 {result.coverUrl && <img src={result.coverUrl} alt="" />}
               </div>
@@ -79,8 +79,8 @@ export function SearchModal({
                 <div className="search-result-title">{result.title}</div>
                 <div className="search-result-author">{result.author}</div>
               </div>
-              <button onClick={() => add(result)} disabled={addingId === result.googleBooksId}>
-                {addingId === result.googleBooksId ? 'Adding…' : 'Add'}
+              <button onClick={() => add(result)} disabled={addingId === result.openLibraryId}>
+                {addingId === result.openLibraryId ? 'Adding…' : 'Add'}
               </button>
             </li>
           ))}

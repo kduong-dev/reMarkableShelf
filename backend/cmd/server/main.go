@@ -6,8 +6,8 @@ import (
 
 	"github.com/kduong-dev/goutil/config"
 	"github.com/kduong-dev/goutil/fatal"
-	"github.com/kqvd/reMarkableShelf/backend/internal/googlebooks"
 	"github.com/kqvd/reMarkableShelf/backend/internal/httpapi"
+	"github.com/kqvd/reMarkableShelf/backend/internal/openlibrary"
 	"github.com/kqvd/reMarkableShelf/backend/internal/remarkable"
 	"github.com/kqvd/reMarkableShelf/backend/internal/store"
 )
@@ -22,7 +22,7 @@ func main() {
 
 	handler := httpapi.NewHandler(httpapi.NewHandlerInput{
 		Store:       db,
-		GoogleBooks: googlebooks.NewClient(config.EnvString("GOOGLE_BOOKS_API_KEY", "")),
+		OpenLibrary: openlibrary.NewClient(),
 		RemarkableConfig: remarkable.Config{
 			User:     config.EnvString("SSH_USER", "root"),
 			Password: config.EnvString("SSH_PASSWORD", ""),

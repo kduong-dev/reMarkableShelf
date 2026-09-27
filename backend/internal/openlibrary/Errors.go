@@ -1,4 +1,4 @@
-package googlebooks
+package openlibrary
 
 import (
 	"net/http"
@@ -8,5 +8,5 @@ import (
 
 var (
 	ErrEmptyQuery          = merry.New("search query is required").WithHTTPCode(http.StatusBadRequest)
-	ErrUpstreamUnavailable = merry.New("google books is unavailable").WithHTTPCode(http.StatusBadGateway)
+	ErrUpstreamUnavailable = merry.New("open library is unavailable").WithHTTPCode(http.StatusBadGateway)
 )

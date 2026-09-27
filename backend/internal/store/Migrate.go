@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS books (
 	status            TEXT NOT NULL DEFAULT 'want_to_read',
 	rating            INTEGER,
 	source            TEXT NOT NULL DEFAULT 'manual',
-	google_books_id   TEXT NOT NULL DEFAULT '',
+	open_library_id   TEXT NOT NULL DEFAULT '',
 	created_at        DATETIME NOT NULL,
 	updated_at        DATETIME NOT NULL
 );
@@ -38,9 +38,31 @@ CREATE INDEX IF NOT EXISTS idx_remarkable_documents_device ON remarkable_documen
 `
 
 func (s *Store) migrate() error {
+	if err := s.renameGoogleBooksIDColumn(); err != nil {
+		return err
+	}
 	_, err := s.DB.Exec(schema)
 	if err != nil {
 		return merry.Wrap(err).WithUserMessage("running database migrations")
+	}
+	return nil
+}
+
+// renameGoogleBooksIDColumn upgrades databases created before search moved
+// from Google Books to Open Library. The stored Google volume IDs mean nothing
+// to Open Library, so they are cleared rather than carried over.
+func (s *Store) renameGoogleBooksIDColumn() error {
+	var count int
+	err := s.DB.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('books') WHERE name = 'google_books_id'`).Scan(&count)
+	if err != nil {
+		return merry.Wrap(err).WithUserMessage("inspecting books table")
+	}
+	if count == 0 {
+		return nil
+	}
+	_, err = s.DB.Exec(`ALTER TABLE books RENAME COLUMN google_books_id TO open_library_id; UPDATE books SET open_library_id = ''`)
+	if err != nil {
+		return merry.Wrap(err).WithUserMessage("renaming google_books_id column")
 	}
 	return nil
 }

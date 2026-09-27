@@ -14,7 +14,7 @@ func (api *API) SearchBooks(responseWriter http.ResponseWriter, request *http.Re
 		}
 	}()
 	query := request.URL.Query().Get("q")
-	results, err := api.googleBooks.Search(query)
+	results, err := api.openLibrary.Search(query)
 	if err != nil {
 		return
 	}

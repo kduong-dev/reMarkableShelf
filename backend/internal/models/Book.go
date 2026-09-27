@@ -30,7 +30,7 @@ type Book struct {
 	Status        BookStatus `json:"status"`
 	Rating        *int       `json:"rating,omitempty"`
 	Source        BookSource `json:"source"`
-	GoogleBooksID string     `json:"googleBooksId,omitempty"`
+	OpenLibraryID string     `json:"openLibraryId,omitempty"`
 	CreatedAt     time.Time  `json:"createdAt"`
 	UpdatedAt     time.Time  `json:"updatedAt"`
 }

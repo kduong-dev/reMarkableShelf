@@ -10,7 +10,7 @@ export interface Book {
   status: BookStatus
   rating?: number
   source: BookSource
-  googleBooksId?: string
+  openLibraryId?: string
   createdAt: string
   updatedAt: string
 }
@@ -34,7 +34,7 @@ export interface RemarkableDocument {
 }
 
 export interface BookSearchResult {
-  googleBooksId: string
+  openLibraryId: string
   title: string
   author: string
   isbn?: string

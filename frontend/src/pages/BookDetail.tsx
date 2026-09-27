@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api/client'
+import { Bookmark } from '../components/Bookmark'
 import type { Book, BookStatus } from '../api/types'
 
 const statusOptions: Array<{ label: string; value: BookStatus }> = [
@@ -25,7 +26,9 @@ export function BookDetail() {
 
   async function updateStatus(status: BookStatus) {
     if (!book) return
-    const updated = await api.updateBook(book.id, { status })
+    // Finishing a book of known length moves the bookmark to its last page.
+    const currentPage = status === 'finished' && book.pageCount ? book.pageCount : undefined
+    const updated = await api.updateBook(book.id, { status, currentPage })
     setBook(updated)
   }
 
@@ -65,6 +68,7 @@ export function BookDetail() {
               </button>
             ))}
           </div>
+          <Bookmark key={`${book.currentPage}-${book.pageCount}`} book={book} onChange={setBook} />
           <button className="danger" onClick={remove}>
             Remove from collection
           </button>

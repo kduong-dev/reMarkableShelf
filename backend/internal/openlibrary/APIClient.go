@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	defaultSearchURL = "https://openlibrary.org/search.json"
+	defaultBaseURL = "https://openlibrary.org"
 	// Open Library asks clients to identify themselves; identified requests
 	// get a higher rate limit than anonymous ones.
 	userAgent = "reMarkableShelf (+https://github.com/kduong-dev/reMarkableShelf)"
@@ -23,10 +23,10 @@ type APIClient struct {
 
 // NewClient builds an Open Library client. No API key is required.
 func NewClient() *APIClient {
-	return NewClientWithBaseURL(defaultSearchURL)
+	return NewClientWithBaseURL(defaultBaseURL)
 }
 
-// NewClientWithBaseURL is NewClient with the Open Library search URL
+// NewClientWithBaseURL is NewClient with the Open Library base URL
 // overridable, so tests can point it at an httptest server instead of the
 // real API.
 func NewClientWithBaseURL(baseURL string) *APIClient {
@@ -42,22 +42,14 @@ func (api *APIClient) Search(query string) ([]Result, error) {
 	if query == "" {
 		return nil, ErrEmptyQuery
 	}
-	request, err := http.NewRequest(http.MethodGet, api.createRequestURL(query), nil)
+	response, err := api.get(api.createSearchURL(query))
 	if err != nil {
-		return nil, merry.Wrap(err)
-	}
-	request.Header.Set("User-Agent", userAgent)
-	response, err := api.httpClient.Do(request)
-	if err != nil {
-		return nil, merry.Wrap(err).WithUserMessage("contacting Open Library")
+		return nil, err
 	}
 	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return nil, merry.Here(ErrUpstreamUnavailable).WithMessagef("open library returned status %d", response.StatusCode)
-	}
 	var parsed searchResponse
-	if err := json.NewDecoder(response.Body).Decode(&parsed); err != nil {
-		return nil, merry.Wrap(err).WithUserMessage("parsing Open Library response")
+	if err := decodeJSON(response, &parsed); err != nil {
+		return nil, err
 	}
 	results := make([]Result, 0, len(parsed.Docs))
 	for _, document := range parsed.Docs {
@@ -66,10 +58,54 @@ func (api *APIClient) Search(query string) ([]Result, error) {
 	return results, nil
 }
 
-func (api *APIClient) createRequestURL(query string) string {
+func (api *APIClient) EditionPageCount(isbn string) (int, error) {
+	if isbn == "" {
+		return 0, ErrEmptyISBN
+	}
+	// The /isbn endpoint redirects to the edition's canonical URL, which
+	// the default client follows.
+	response, err := api.get(api.baseURL + "/isbn/" + url.PathEscape(isbn) + ".json")
+	if err != nil {
+		return 0, err
+	}
+	defer response.Body.Close()
+	if response.StatusCode == http.StatusNotFound {
+		return 0, merry.Here(ErrEditionNotFound).WithMessagef("no edition with isbn %s", isbn)
+	}
+	var parsed editionResponse
+	if err := decodeJSON(response, &parsed); err != nil {
+		return 0, err
+	}
+	return parsed.PageCount, nil
+}
+
+func (api *APIClient) createSearchURL(query string) string {
 	values := make(url.Values)
 	values.Set("q", query)
 	values.Set("limit", "20")
-	values.Set("fields", "key,title,author_name,isbn,cover_i")
-	return api.baseURL + "?" + values.Encode()
+	values.Set("fields", "key,title,author_name,isbn,cover_i,number_of_pages_median")
+	return api.baseURL + "/search.json?" + values.Encode()
+}
+
+func (api *APIClient) get(requestURL string) (*http.Response, error) {
+	request, err := http.NewRequest(http.MethodGet, requestURL, nil)
+	if err != nil {
+		return nil, merry.Wrap(err)
+	}
+	request.Header.Set("User-Agent", userAgent)
+	response, err := api.httpClient.Do(request)
+	if err != nil {
+		return nil, merry.Wrap(err).WithUserMessage("contacting Open Library")
+	}
+	return response, nil
+}
+
+func decodeJSON(response *http.Response, target any) error {
+	if response.StatusCode != http.StatusOK {
+		return merry.Here(ErrUpstreamUnavailable).WithMessagef("open library returned status %d", response.StatusCode)
+	}
+	if err := json.NewDecoder(response.Body).Decode(target); err != nil {
+		return merry.Wrap(err).WithUserMessage("parsing Open Library response")
+	}
+	return nil
 }

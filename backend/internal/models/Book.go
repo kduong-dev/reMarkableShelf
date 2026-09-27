@@ -31,6 +31,8 @@ type Book struct {
 	Rating        *int       `json:"rating,omitempty"`
 	Source        BookSource `json:"source"`
 	OpenLibraryID string     `json:"openLibraryId,omitempty"`
+	PageCount     *int       `json:"pageCount,omitempty"`
+	CurrentPage   *int       `json:"currentPage,omitempty"`
 	CreatedAt     time.Time  `json:"createdAt"`
 	UpdatedAt     time.Time  `json:"updatedAt"`
 }

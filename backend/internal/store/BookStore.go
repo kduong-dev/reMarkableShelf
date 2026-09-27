@@ -11,7 +11,7 @@ import (
 )
 
 func (s *Store) ListBooks() ([]models.Book, error) {
-	rows, err := s.DB.Query(`SELECT id, title, author, isbn, cover_url, status, rating, source, open_library_id, created_at, updated_at FROM books ORDER BY updated_at DESC`)
+	rows, err := s.DB.Query(`SELECT id, title, author, isbn, cover_url, status, rating, source, open_library_id, page_count, current_page, created_at, updated_at FROM books ORDER BY updated_at DESC`)
 	if err != nil {
 		return nil, merry.Wrap(err)
 	}
@@ -29,7 +29,7 @@ func (s *Store) ListBooks() ([]models.Book, error) {
 }
 
 func (s *Store) GetBook(id string) (models.Book, error) {
-	row := s.DB.QueryRow(`SELECT id, title, author, isbn, cover_url, status, rating, source, open_library_id, created_at, updated_at FROM books WHERE id = ?`, id)
+	row := s.DB.QueryRow(`SELECT id, title, author, isbn, cover_url, status, rating, source, open_library_id, page_count, current_page, created_at, updated_at FROM books WHERE id = ?`, id)
 	book, err := scanBook(row)
 	if err == sql.ErrNoRows {
 		return models.Book{}, merry.New("book not found").WithHTTPCode(http.StatusNotFound).WithUserMessagef("no book with id %q", id)
@@ -48,13 +48,16 @@ func (s *Store) CreateBook(book models.Book) (models.Book, error) {
 	if book.Source == "" {
 		book.Source = models.SourceManual
 	}
+	if err := validateProgress(book); err != nil {
+		return models.Book{}, err
+	}
 	now := time.Now().UTC()
 	book.CreatedAt, book.UpdatedAt = now, now
 
 	_, err := s.DB.Exec(
-		`INSERT INTO books (id, title, author, isbn, cover_url, status, rating, source, open_library_id, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		book.ID, book.Title, book.Author, book.ISBN, book.CoverURL, book.Status, book.Rating, book.Source, book.OpenLibraryID, book.CreatedAt, book.UpdatedAt,
+		`INSERT INTO books (id, title, author, isbn, cover_url, status, rating, source, open_library_id, page_count, current_page, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		book.ID, book.Title, book.Author, book.ISBN, book.CoverURL, book.Status, book.Rating, book.Source, book.OpenLibraryID, book.PageCount, book.CurrentPage, book.CreatedAt, book.UpdatedAt,
 	)
 	if err != nil {
 		return models.Book{}, merry.Wrap(err).WithUserMessage("creating book")
@@ -83,11 +86,20 @@ func (s *Store) UpdateBook(id string, patch models.Book) (models.Book, error) {
 	if patch.CoverURL != "" {
 		existing.CoverURL = patch.CoverURL
 	}
+	if patch.PageCount != nil {
+		existing.PageCount = patch.PageCount
+	}
+	if patch.CurrentPage != nil {
+		existing.CurrentPage = patch.CurrentPage
+	}
+	if err := validateProgress(existing); err != nil {
+		return models.Book{}, err
+	}
 	existing.UpdatedAt = time.Now().UTC()
 
 	_, err = s.DB.Exec(
-		`UPDATE books SET title = ?, author = ?, isbn = ?, cover_url = ?, status = ?, rating = ?, updated_at = ? WHERE id = ?`,
-		existing.Title, existing.Author, existing.ISBN, existing.CoverURL, existing.Status, existing.Rating, existing.UpdatedAt, existing.ID,
+		`UPDATE books SET title = ?, author = ?, isbn = ?, cover_url = ?, status = ?, rating = ?, page_count = ?, current_page = ?, updated_at = ? WHERE id = ?`,
+		existing.Title, existing.Author, existing.ISBN, existing.CoverURL, existing.Status, existing.Rating, existing.PageCount, existing.CurrentPage, existing.UpdatedAt, existing.ID,
 	)
 	if err != nil {
 		return models.Book{}, merry.Wrap(err).WithUserMessage("updating book")
@@ -106,13 +118,28 @@ func (s *Store) DeleteBook(id string) error {
 	return nil
 }
 
+// validateProgress rejects a bookmark that can't exist: negative numbers, or
+// a current page past the end of a book whose length is known.
+func validateProgress(book models.Book) error {
+	if book.PageCount != nil && *book.PageCount < 1 {
+		return merry.Here(ErrInvalidPageCount)
+	}
+	if book.CurrentPage != nil && *book.CurrentPage < 0 {
+		return merry.Here(ErrCurrentPageOutOfRange)
+	}
+	if book.PageCount != nil && book.CurrentPage != nil && *book.CurrentPage > *book.PageCount {
+		return merry.Here(ErrCurrentPageOutOfRange).WithUserMessagef("page %d is past the end of a %d-page book", *book.CurrentPage, *book.PageCount)
+	}
+	return nil
+}
+
 type rowScanner interface {
 	Scan(dest ...any) error
 }
 
 func scanBook(row rowScanner) (models.Book, error) {
 	var b models.Book
-	err := row.Scan(&b.ID, &b.Title, &b.Author, &b.ISBN, &b.CoverURL, &b.Status, &b.Rating, &b.Source, &b.OpenLibraryID, &b.CreatedAt, &b.UpdatedAt)
+	err := row.Scan(&b.ID, &b.Title, &b.Author, &b.ISBN, &b.CoverURL, &b.Status, &b.Rating, &b.Source, &b.OpenLibraryID, &b.PageCount, &b.CurrentPage, &b.CreatedAt, &b.UpdatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return models.Book{}, err

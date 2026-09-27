@@ -11,6 +11,8 @@ export interface Book {
   rating?: number
   source: BookSource
   openLibraryId?: string
+  pageCount?: number
+  currentPage?: number
   createdAt: string
   updatedAt: string
 }
@@ -39,4 +41,5 @@ export interface BookSearchResult {
   author: string
   isbn?: string
   coverUrl?: string
+  pageCount?: number
 }

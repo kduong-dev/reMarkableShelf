@@ -8,6 +8,7 @@ import (
 	. "github.com/smartystreets/goconvey/convey"
 	_ "modernc.org/sqlite"
 
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/models"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/store"
 )
 
@@ -30,6 +31,11 @@ func TestMigrate(t *testing.T) {
 			opened, err := store.Open(path)
 			So(err, ShouldBeNil)
 			Reset(func() { _ = opened.Close() })
+			Convey("Then the page columns are added", func() {
+				pageCount := 544
+				_, err := opened.UpdateBook("book-1", models.Book{PageCount: &pageCount})
+				So(err, ShouldBeNil)
+			})
 			Convey("Then the book is kept with its Google Books ID cleared", func() {
 				book, err := opened.GetBook("book-1")
 				So(err, ShouldBeNil)

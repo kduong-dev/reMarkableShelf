@@ -19,6 +19,7 @@ type workDocument struct {
 	AuthorName []string `json:"author_name"`
 	ISBN       []string `json:"isbn"`
 	CoverID    int      `json:"cover_i"`
+	PageCount  int      `json:"number_of_pages_median"`
 }
 
 // toResult picks the fields the frontend needs out of a work. A work lists
@@ -48,5 +49,6 @@ func (document workDocument) toResult() Result {
 		Author:        author,
 		ISBN:          isbn,
 		CoverURL:      coverURL,
+		PageCount:     document.PageCount,
 	}
 }

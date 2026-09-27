@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS books (
 	rating            INTEGER,
 	source            TEXT NOT NULL DEFAULT 'manual',
 	open_library_id   TEXT NOT NULL DEFAULT '',
+	page_count        INTEGER,
+	current_page      INTEGER,
 	created_at        DATETIME NOT NULL,
 	updated_at        DATETIME NOT NULL
 );
@@ -45,6 +47,34 @@ func (s *Store) migrate() error {
 	if err != nil {
 		return merry.Wrap(err).WithUserMessage("running database migrations")
 	}
+	for _, column := range []string{"page_count", "current_page"} {
+		if err := s.addColumnIfMissing("books", column, "INTEGER"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Store) columnExists(table, column string) (bool, error) {
+	var count int
+	err := s.DB.QueryRow(`SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?`, table, column).Scan(&count)
+	if err != nil {
+		return false, merry.Wrap(err).WithUserMessagef("inspecting %s table", table)
+	}
+	return count > 0, nil
+}
+
+// addColumnIfMissing brings tables created by an older schema up to date,
+// since CREATE TABLE IF NOT EXISTS leaves existing tables untouched.
+func (s *Store) addColumnIfMissing(table, column, definition string) error {
+	exists, err := s.columnExists(table, column)
+	if err != nil || exists {
+		return err
+	}
+	_, err = s.DB.Exec(`ALTER TABLE ` + table + ` ADD COLUMN ` + column + ` ` + definition)
+	if err != nil {
+		return merry.Wrap(err).WithUserMessagef("adding %s.%s column", table, column)
+	}
 	return nil
 }
 
@@ -52,13 +82,9 @@ func (s *Store) migrate() error {
 // from Google Books to Open Library. The stored Google volume IDs mean nothing
 // to Open Library, so they are cleared rather than carried over.
 func (s *Store) renameGoogleBooksIDColumn() error {
-	var count int
-	err := s.DB.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('books') WHERE name = 'google_books_id'`).Scan(&count)
-	if err != nil {
-		return merry.Wrap(err).WithUserMessage("inspecting books table")
-	}
-	if count == 0 {
-		return nil
+	exists, err := s.columnExists("books", "google_books_id")
+	if err != nil || !exists {
+		return err
 	}
 	_, err = s.DB.Exec(`ALTER TABLE books RENAME COLUMN google_books_id TO open_library_id; UPDATE books SET open_library_id = ''`)
 	if err != nil {

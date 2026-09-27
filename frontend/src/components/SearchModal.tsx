@@ -37,6 +37,7 @@ export function SearchModal({
         author: result.author,
         isbn: result.isbn,
         coverUrl: result.coverUrl,
+        pageCount: result.pageCount,
         openLibraryId: result.openLibraryId,
         source: 'manual',
       })
@@ -77,7 +78,11 @@ export function SearchModal({
               </div>
               <div className="search-result-info">
                 <div className="search-result-title">{result.title}</div>
-                <div className="search-result-author">{result.author}</div>
+                <div className="search-result-author">
+                  {[result.author, result.pageCount && `${result.pageCount} pages`]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </div>
               </div>
               <button onClick={() => add(result)} disabled={addingId === result.openLibraryId}>
                 {addingId === result.openLibraryId ? 'Adding…' : 'Add'}

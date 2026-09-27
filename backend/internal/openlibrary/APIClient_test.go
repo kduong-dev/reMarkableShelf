@@ -47,7 +47,8 @@ func TestSearch(t *testing.T) {
 					"title": "Dune",
 					"author_name": ["Frank Herbert"],
 					"isbn": ["0441013597", "9780441013593"],
-					"cover_i": 11481354
+					"cover_i": 11481354,
+					"number_of_pages_median": 608
 				}, {
 					"key": "/works/OL1W",
 					"title": "Untitled"
@@ -70,6 +71,7 @@ func TestSearch(t *testing.T) {
 					Author:        "Frank Herbert",
 					ISBN:          "9780441013593",
 					CoverURL:      "https://covers.openlibrary.org/b/id/11481354-M.jpg",
+					PageCount:     608,
 				})
 			})
 			Convey("Then a work without author, ISBN or cover leaves those fields empty", func() {
@@ -77,6 +79,56 @@ func TestSearch(t *testing.T) {
 					OpenLibraryID: "OL1W",
 					Title:         "Untitled",
 				})
+			})
+		})
+	})
+}
+
+func TestEditionPageCount(t *testing.T) {
+	Convey("Given an Open Library client", t, func() {
+		client := openlibrary.NewClient()
+		Convey("When looking up an empty ISBN", func() {
+			pageCount, err := client.EditionPageCount("")
+			Convey("Then it returns ErrEmptyISBN without making a request", func() {
+				So(pageCount, ShouldEqual, 0)
+				So(merry.Is(err, openlibrary.ErrEmptyISBN), ShouldBeTrue)
+			})
+		})
+	})
+	Convey("Given a fake Open Library server that redirects an ISBN to its edition", t, func() {
+		server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+			switch request.URL.Path {
+			case "/isbn/9780441013593.json":
+				http.Redirect(responseWriter, request, "/books/OL7353617M.json", http.StatusFound)
+			case "/books/OL7353617M.json":
+				_, _ = responseWriter.Write([]byte(`{"title": "Dune", "number_of_pages": 544}`))
+			case "/isbn/9780000000002.json":
+				_, _ = responseWriter.Write([]byte(`{"title": "No page count"}`))
+			default:
+				http.NotFound(responseWriter, request)
+			}
+		}))
+		Reset(server.Close)
+		client := openlibrary.NewClientWithBaseURL(server.URL)
+		Convey("When looking up a known ISBN", func() {
+			pageCount, err := client.EditionPageCount("9780441013593")
+			Convey("Then it follows the redirect and returns the edition's page count", func() {
+				So(err, ShouldBeNil)
+				So(pageCount, ShouldEqual, 544)
+			})
+		})
+		Convey("When the edition has no page count", func() {
+			pageCount, err := client.EditionPageCount("9780000000002")
+			Convey("Then it returns 0 without an error", func() {
+				So(err, ShouldBeNil)
+				So(pageCount, ShouldEqual, 0)
+			})
+		})
+		Convey("When looking up an unknown ISBN", func() {
+			pageCount, err := client.EditionPageCount("9780000000001")
+			Convey("Then it returns ErrEditionNotFound", func() {
+				So(pageCount, ShouldEqual, 0)
+				So(merry.Is(err, openlibrary.ErrEditionNotFound), ShouldBeTrue)
 			})
 		})
 	})

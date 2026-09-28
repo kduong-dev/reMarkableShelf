@@ -15,7 +15,7 @@ func (api *API) UpdateDevice(responseWriter http.ResponseWriter, request *http.R
 	var err error
 	defer func() {
 		if err != nil {
-			sendErrorResponse(responseWriter, err)
+			merrifiedSentinels.SendErrorResponse(responseWriter, err)
 		}
 	}()
 	body, err := httpx.DecodeJSONBody[updateDeviceRequest](request)

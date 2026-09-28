@@ -6,7 +6,7 @@ require (
 	github.com/ansel1/merry v1.8.2
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
-	github.com/kduong-dev/goutil v0.4.0
+	github.com/kduong-dev/goutil v0.4.2
 	github.com/smartystreets/goconvey v1.8.1
 	golang.org/x/crypto v0.57.0
 	modernc.org/sqlite v1.59.0

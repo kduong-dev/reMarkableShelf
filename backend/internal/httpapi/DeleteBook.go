@@ -10,7 +10,7 @@ func (api *API) DeleteBook(responseWriter http.ResponseWriter, request *http.Req
 	var err error
 	defer func() {
 		if err != nil {
-			sendErrorResponse(responseWriter, err)
+			merrifiedSentinels.SendErrorResponse(responseWriter, err)
 		}
 	}()
 	vars := mux.Vars(request)

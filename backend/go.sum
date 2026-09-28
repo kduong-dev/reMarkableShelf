@@ -70,8 +70,8 @@ github.com/jtolds/gls v4.20.0+incompatible h1:xdiiI2gbIgH/gLH7ADydsJ1uDOEzR8yvV7
 github.com/jtolds/gls v4.20.0+incompatible/go.mod h1:QJZ7F/aHp+rZTRtaJ1ow/lLfFfVYBRgL+9YlvaHOwJU=
 github.com/k0kubun/colorstring v0.0.0-20150214042306-9440f1994b88/go.mod h1:3w7q1U84EfirKl04SVQ/s7nPm1ZPhiXd34z40TNz36k=
 github.com/k0kubun/pp v2.3.0+incompatible/go.mod h1:GWse8YhT0p8pT4ir3ZgBbfZild3tgzSScAn6HmfYukg=
-github.com/kduong-dev/goutil v0.4.0 h1:PHLpXIXSjDUeLrQ/FX3RxBOZazcQ4CAIeucJNKbN62k=
-github.com/kduong-dev/goutil v0.4.0/go.mod h1:K4dkU3XHfRws017jeuad23VjhwY6WLL+O1W55ixBPuk=
+github.com/kduong-dev/goutil v0.4.2 h1:wighu8dUfmjNo4WqWDcu9w163+B+VBeMEfg+jEpTjRE=
+github.com/kduong-dev/goutil v0.4.2/go.mod h1:K4dkU3XHfRws017jeuad23VjhwY6WLL+O1W55ixBPuk=
 github.com/mattn/go-colorable v0.0.9/go.mod h1:9vuHe8Xs5qXnSaW/c/ABM9alt+Vo+STaOChaDxuIBZU=
 github.com/mattn/go-isatty v0.0.4/go.mod h1:M+lRXTBqGeGNdLjl/ufCoiOlB5xdOkqRJdNxMWT7Zi4=
 github.com/mattn/go-isatty v0.0.24 h1:tGZZoVgT/KiqK1c8ocVLeDS8BSWMRd47J3Lbz7vsReI=

@@ -10,7 +10,7 @@ func (api *API) ListDevices(responseWriter http.ResponseWriter, request *http.Re
 	var err error
 	defer func() {
 		if err != nil {
-			sendErrorResponse(responseWriter, err)
+			merrifiedSentinels.SendErrorResponse(responseWriter, err)
 		}
 	}()
 	devices, err := api.store.Devices.List()

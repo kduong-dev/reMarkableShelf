@@ -41,9 +41,3 @@ var merrifiedSentinels = httpx.MerrifiedSentinels{
 	{Sentinel: openlibrary.ErrInvalidYearRange, StatusCode: http.StatusBadRequest, UserMessage: "the published year range is invalid"},
 	{Sentinel: openlibrary.ErrUpstreamUnavailable, StatusCode: http.StatusBadGateway, UserMessage: "Open Library is unavailable, try again shortly"},
 }
-
-// sendErrorResponse sends err with the status code and user message of the
-// sentinel it wraps, including store errors returned through the syncer.
-func sendErrorResponse(responseWriter http.ResponseWriter, err error) {
-	httpx.SendErrorResponse(responseWriter, merrifiedSentinels.Merrify(err))
-}

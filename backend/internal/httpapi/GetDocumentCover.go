@@ -15,7 +15,7 @@ func (api *API) GetDocumentCover(responseWriter http.ResponseWriter, request *ht
 	var err error
 	defer func() {
 		if err != nil {
-			sendErrorResponse(responseWriter, err)
+			merrifiedSentinels.SendErrorResponse(responseWriter, err)
 		}
 	}()
 	vars := mux.Vars(request)

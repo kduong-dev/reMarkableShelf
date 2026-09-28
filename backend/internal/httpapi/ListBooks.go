@@ -10,7 +10,7 @@ func (api *API) ListBooks(responseWriter http.ResponseWriter, request *http.Requ
 	var err error
 	defer func() {
 		if err != nil {
-			sendErrorResponse(responseWriter, err)
+			merrifiedSentinels.SendErrorResponse(responseWriter, err)
 		}
 	}()
 	books, err := api.store.Books.List()

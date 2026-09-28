@@ -14,7 +14,7 @@ func (api *API) SearchBooks(responseWriter http.ResponseWriter, request *http.Re
 	var err error
 	defer func() {
 		if err != nil {
-			sendErrorResponse(responseWriter, err)
+			merrifiedSentinels.SendErrorResponse(responseWriter, err)
 		}
 	}()
 	values := request.URL.Query()

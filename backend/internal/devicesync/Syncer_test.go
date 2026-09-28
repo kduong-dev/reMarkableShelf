@@ -79,14 +79,14 @@ func TestSyncDevice(t *testing.T) {
 		opened, err := store.Open(filepath.Join(t.TempDir(), "books.db"))
 		So(err, ShouldBeNil)
 		Reset(func() { _ = opened.Close() })
-		device, err := opened.CreateDevice(models.Device{Name: "Paper Pro", Host: "10.0.0.5"})
+		device, err := opened.Devices.Create(models.Device{Name: "Paper Pro", Host: "10.0.0.5"})
 		So(err, ShouldBeNil)
 		tablet := &fakeTablet{}
 		syncer := devicesync.NewSyncer(opened, tablet)
 		sync := func() models.Book {
 			_, err := syncer.SyncDevice(device.ID)
 			So(err, ShouldBeNil)
-			books, err := opened.ListBooks()
+			books, err := opened.Books.List()
 			So(err, ShouldBeNil)
 			return books[0]
 		}
@@ -94,7 +94,7 @@ func TestSyncDevice(t *testing.T) {
 		tabletTime := time.Now().UTC().Add(-time.Hour).Truncate(time.Millisecond)
 
 		Convey("When a 544-page book's PDF is on page 42 of 171 on the tablet", func() {
-			_, err := opened.CreateBook(models.Book{Title: "Dune", PageCount: pages(544)})
+			_, err := opened.Books.Create(models.Book{Title: "Dune", PageCount: pages(544)})
 			So(err, ShouldBeNil)
 			tablet.documents = []models.RemarkableDocument{openedDocument("Dune", 42, 171, tabletTime)}
 			book := sync()
@@ -106,13 +106,13 @@ func TestSyncDevice(t *testing.T) {
 				So(*book.ProgressUpdatedAt, ShouldEqual, tabletTime)
 			})
 			Convey("Then the tablet's own position is kept on the document", func() {
-				documents, err := opened.ListDocumentsByDevice(device.ID)
+				documents, err := opened.Documents.ListByDevice(device.ID)
 				So(err, ShouldBeNil)
 				So(*documents[0].CurrentPage, ShouldEqual, 42)
 				So(*documents[0].PageCount, ShouldEqual, 171)
 			})
 			Convey("And the bookmark is then changed in the app", func() {
-				_, err := opened.UpdateBook(book.ID, models.Book{CurrentPage: pages(60)})
+				_, err := opened.Books.Update(book.ID, models.Book{CurrentPage: pages(60)})
 				So(err, ShouldBeNil)
 				Convey("Then syncing the same tablet position again leaves the app's bookmark", func() {
 					book := sync()
@@ -128,7 +128,7 @@ func TestSyncDevice(t *testing.T) {
 			})
 		})
 		Convey("When a book of unknown length is open on the tablet", func() {
-			_, err := opened.CreateBook(models.Book{Title: "Meeting notes"})
+			_, err := opened.Books.Create(models.Book{Title: "Meeting notes"})
 			So(err, ShouldBeNil)
 			tablet.documents = []models.RemarkableDocument{openedDocument("Meeting notes", 12, 40, tabletTime)}
 			book := sync()
@@ -138,7 +138,7 @@ func TestSyncDevice(t *testing.T) {
 			})
 		})
 		Convey("When the tablet is on a book's last page", func() {
-			_, err := opened.CreateBook(models.Book{Title: "Dune", PageCount: pages(544)})
+			_, err := opened.Books.Create(models.Book{Title: "Dune", PageCount: pages(544)})
 			So(err, ShouldBeNil)
 			tablet.documents = []models.RemarkableDocument{openedDocument("Dune", 171, 171, tabletTime)}
 			book := sync()
@@ -148,7 +148,7 @@ func TestSyncDevice(t *testing.T) {
 			})
 		})
 		Convey("When a bookmarked book is linked to a document with no newer position", func() {
-			_, err := opened.CreateBook(models.Book{Title: "Dune", PageCount: pages(544), CurrentPage: pages(272)})
+			_, err := opened.Books.Create(models.Book{Title: "Dune", PageCount: pages(544), CurrentPage: pages(272)})
 			So(err, ShouldBeNil)
 			tablet.documents = []models.RemarkableDocument{openedDocument("Dune", 10, 171, tabletTime)}
 			book := sync()
@@ -159,7 +159,7 @@ func TestSyncDevice(t *testing.T) {
 			})
 		})
 		Convey("When a Finished book is opened on the tablet partway through", func() {
-			_, err := opened.CreateBook(models.Book{Title: "Dune", Status: models.StatusFinished, PageCount: pages(544)})
+			_, err := opened.Books.Create(models.Book{Title: "Dune", Status: models.StatusFinished, PageCount: pages(544)})
 			So(err, ShouldBeNil)
 			tablet.documents = []models.RemarkableDocument{openedDocument("Dune", 10, 171, tabletTime)}
 			book := sync()
@@ -169,7 +169,7 @@ func TestSyncDevice(t *testing.T) {
 			})
 		})
 		Convey("When a linked document has never been opened on the tablet", func() {
-			_, err := opened.CreateBook(models.Book{Title: "Dune", PageCount: pages(544)})
+			_, err := opened.Books.Create(models.Book{Title: "Dune", PageCount: pages(544)})
 			So(err, ShouldBeNil)
 			tablet.documents = []models.RemarkableDocument{{UUID: "document-1", Title: "Dune", FileType: models.FileTypePDF, LastModified: tabletTime}}
 			book := sync()
@@ -186,7 +186,7 @@ func TestLinkDocument(t *testing.T) {
 		opened, err := store.Open(filepath.Join(t.TempDir(), "books.db"))
 		So(err, ShouldBeNil)
 		Reset(func() { _ = opened.Close() })
-		device, err := opened.CreateDevice(models.Device{Name: "Paper Pro", Host: "10.0.0.5"})
+		device, err := opened.Devices.Create(models.Device{Name: "Paper Pro", Host: "10.0.0.5"})
 		So(err, ShouldBeNil)
 		tablet := &fakeTablet{documents: []models.RemarkableDocument{
 			openedDocument("dale-carnegie.pdf", 42, 171, time.Now().UTC().Add(-time.Hour).Truncate(time.Millisecond)),
@@ -195,11 +195,11 @@ func TestLinkDocument(t *testing.T) {
 		_, err = syncer.SyncDevice(device.ID)
 		So(err, ShouldBeNil)
 		Convey("When linking it to a 280-page book", func() {
-			book, err := opened.CreateBook(models.Book{Title: "How to Win Friends and Influence People", PageCount: pages(280)})
+			book, err := opened.Books.Create(models.Book{Title: "How to Win Friends and Influence People", PageCount: pages(280)})
 			So(err, ShouldBeNil)
 			So(syncer.LinkDocument(device.ID, "document-1", book.ID), ShouldBeNil)
 			Convey("Then the book takes the tablet's page and page count straight away", func() {
-				linked, err := opened.GetBook(book.ID)
+				linked, err := opened.Books.Get(book.ID)
 				So(err, ShouldBeNil)
 				So(*linked.CurrentPage, ShouldEqual, 42)
 				So(*linked.PageCount, ShouldEqual, 171)
@@ -215,9 +215,9 @@ func TestAlignBook(t *testing.T) {
 		opened, err := store.Open(filepath.Join(t.TempDir(), "books.db"))
 		So(err, ShouldBeNil)
 		Reset(func() { _ = opened.Close() })
-		device, err := opened.CreateDevice(models.Device{Name: "Paper Pro", Host: "10.0.0.5"})
+		device, err := opened.Devices.Create(models.Device{Name: "Paper Pro", Host: "10.0.0.5"})
 		So(err, ShouldBeNil)
-		book, err := opened.CreateBook(models.Book{Title: "Dune"})
+		book, err := opened.Books.Create(models.Book{Title: "Dune"})
 		So(err, ShouldBeNil)
 		tablet := &fakeTablet{documents: []models.RemarkableDocument{
 			openedDocument("Dune", 42, 171, time.Now().UTC().Add(-time.Hour).Truncate(time.Millisecond)),
@@ -226,11 +226,11 @@ func TestAlignBook(t *testing.T) {
 		_, err = syncer.SyncDevice(device.ID)
 		So(err, ShouldBeNil)
 		Convey("When an edit gives the book another edition's page count", func() {
-			_, err := opened.UpdateBook(book.ID, models.Book{PageCount: pages(280)})
+			_, err := opened.Books.Update(book.ID, models.Book{PageCount: pages(280)})
 			So(err, ShouldBeNil)
 			So(syncer.AlignBook(book.ID), ShouldBeNil)
 			Convey("Then aligning puts it back on the tablet's pages", func() {
-				aligned, err := opened.GetBook(book.ID)
+				aligned, err := opened.Books.Get(book.ID)
 				So(err, ShouldBeNil)
 				So(*aligned.PageCount, ShouldEqual, 171)
 				So(*aligned.CurrentPage, ShouldEqual, 42)
@@ -244,9 +244,9 @@ func TestUnlinkDocument(t *testing.T) {
 		opened, err := store.Open(filepath.Join(t.TempDir(), "books.db"))
 		So(err, ShouldBeNil)
 		Reset(func() { _ = opened.Close() })
-		device, err := opened.CreateDevice(models.Device{Name: "Paper Pro", Host: "10.0.0.5"})
+		device, err := opened.Devices.Create(models.Device{Name: "Paper Pro", Host: "10.0.0.5"})
 		So(err, ShouldBeNil)
-		book, err := opened.CreateBook(models.Book{Title: "Dune"})
+		book, err := opened.Books.Create(models.Book{Title: "Dune"})
 		So(err, ShouldBeNil)
 		tablet := &fakeTablet{documents: []models.RemarkableDocument{{UUID: "document-1", Title: "Dune", FileType: models.FileTypePDF, LastModified: time.Now().UTC()}}}
 		syncer := devicesync.NewSyncer(opened, tablet)
@@ -257,7 +257,7 @@ func TestUnlinkDocument(t *testing.T) {
 		}
 		So(*linkedTo(), ShouldEqual, book.ID)
 		Convey("When the user unlinks it and the tablet syncs again", func() {
-			So(opened.UnlinkDocument(device.ID, "document-1"), ShouldBeNil)
+			So(opened.Documents.Unlink(device.ID, "document-1"), ShouldBeNil)
 			Convey("Then sync doesn't link it again by title", func() {
 				So(linkedTo(), ShouldBeNil)
 			})
@@ -274,7 +274,7 @@ func TestCovers(t *testing.T) {
 		opened, err := store.Open(filepath.Join(t.TempDir(), "books.db"))
 		So(err, ShouldBeNil)
 		Reset(func() { _ = opened.Close() })
-		device, err := opened.CreateDevice(models.Device{Name: "Paper Pro", Host: "10.0.0.5"})
+		device, err := opened.Devices.Create(models.Device{Name: "Paper Pro", Host: "10.0.0.5"})
 		So(err, ShouldBeNil)
 		modifiedAt := time.Now().UTC().Add(-time.Hour).Truncate(time.Millisecond)
 		pdf := models.RemarkableDocument{UUID: "document-1", Title: "Dune", FileType: models.FileTypePDF, LastModified: modifiedAt, CoverPageID: "page-1"}
@@ -284,19 +284,19 @@ func TestCovers(t *testing.T) {
 			covers:    map[string][]byte{"document-1": []byte("dune cover"), "notebook-1": []byte("notes cover")},
 		}
 		syncer := devicesync.NewSyncer(opened, tablet)
-		book, err := opened.CreateBook(models.Book{Title: "Dune"})
+		book, err := opened.Books.Create(models.Book{Title: "Dune"})
 		So(err, ShouldBeNil)
 		_, err = syncer.SyncDevice(device.ID)
 		So(err, ShouldBeNil)
 		Convey("When the first sync runs", func() {
 			Convey("Then only the PDF's cover is fetched and stored", func() {
 				So(tablet.coverRequests, ShouldResemble, []remarkable.CoverRequest{{DocumentUUID: "document-1", PageID: "page-1"}})
-				image, err := opened.GetDocumentCover(device.ID, "document-1")
+				image, err := opened.Documents.GetCover(device.ID, "document-1")
 				So(err, ShouldBeNil)
 				So(string(image), ShouldEqual, "dune cover")
 			})
 			Convey("Then the book it auto-linked to offers the tablet's cover", func() {
-				linked, err := opened.GetBook(book.ID)
+				linked, err := opened.Books.Get(book.ID)
 				So(err, ShouldBeNil)
 				So(linked.TabletCoverURL, ShouldEqual, "/api/devices/"+device.ID+"/documents/document-1/cover")
 			})
@@ -318,7 +318,7 @@ func TestCovers(t *testing.T) {
 			Convey("Then the new cover replaces the old", func() {
 				So(err, ShouldBeNil)
 				So(tablet.coverRequests, ShouldHaveLength, 1)
-				image, err := opened.GetDocumentCover(device.ID, "document-1")
+				image, err := opened.Documents.GetCover(device.ID, "document-1")
 				So(err, ShouldBeNil)
 				So(string(image), ShouldEqual, "new cover")
 			})
@@ -328,7 +328,7 @@ func TestCovers(t *testing.T) {
 		opened, err := store.Open(filepath.Join(t.TempDir(), "books.db"))
 		So(err, ShouldBeNil)
 		Reset(func() { _ = opened.Close() })
-		device, err := opened.CreateDevice(models.Device{Name: "Paper Pro", Host: "10.0.0.5"})
+		device, err := opened.Devices.Create(models.Device{Name: "Paper Pro", Host: "10.0.0.5"})
 		So(err, ShouldBeNil)
 		tablet := &fakeTablet{documents: []models.RemarkableDocument{
 			{UUID: "document-1", Title: "Dune", FileType: models.FileTypePDF, LastModified: time.Now().UTC(), CoverPageID: "page-1"},
@@ -341,7 +341,7 @@ func TestCovers(t *testing.T) {
 			_, err := syncer.SyncDevice(device.ID)
 			Convey("Then that sync picks it up", func() {
 				So(err, ShouldBeNil)
-				image, err := opened.GetDocumentCover(device.ID, "document-1")
+				image, err := opened.Documents.GetCover(device.ID, "document-1")
 				So(err, ShouldBeNil)
 				So(string(image), ShouldEqual, "dune cover")
 			})
@@ -355,7 +355,7 @@ func TestTabletIdentity(t *testing.T) {
 		So(err, ShouldBeNil)
 		Reset(func() { _ = opened.Close() })
 		pairedAt := time.Now().UTC()
-		device, err := opened.CreateDevice(models.Device{Name: "Paper Pro", Host: "10.0.0.5", PairedAt: &pairedAt})
+		device, err := opened.Devices.Create(models.Device{Name: "Paper Pro", Host: "10.0.0.5", PairedAt: &pairedAt})
 		So(err, ShouldBeNil)
 		tablet := &fakeTablet{hostKey: "ssh-ed25519 AAAA-real-tablet"}
 		syncer := devicesync.NewSyncer(opened, tablet)
@@ -363,7 +363,7 @@ func TestTabletIdentity(t *testing.T) {
 			_, err := syncer.SyncDevice(device.ID)
 			Convey("Then the host key it presented is recorded and required from then on", func() {
 				So(err, ShouldBeNil)
-				stored, err := opened.GetDevice(device.ID)
+				stored, err := opened.Devices.Get(device.ID)
 				So(err, ShouldBeNil)
 				So(stored.HostKey, ShouldEqual, "ssh-ed25519 AAAA-real-tablet")
 				_, err = syncer.SyncDevice(device.ID)
@@ -378,7 +378,7 @@ func TestTabletIdentity(t *testing.T) {
 			_, err = syncer.SyncDevice(device.ID)
 			Convey("Then the sync fails and the device is unpaired with its identity flagged", func() {
 				So(merry.Is(err, remarkable.ErrHostKeyChanged), ShouldBeTrue)
-				stored, err := opened.GetDevice(device.ID)
+				stored, err := opened.Devices.Get(device.ID)
 				So(err, ShouldBeNil)
 				So(stored.PairedAt, ShouldBeNil)
 				So(stored.IdentityChanged, ShouldBeTrue)
@@ -418,7 +418,7 @@ func TestPairing(t *testing.T) {
 				So(err, ShouldBeNil)
 				So(tablet.pairedWith, ShouldEqual, "secret")
 				So(device.Name, ShouldEqual, "Paper Pro")
-				stored, err := opened.GetDevice(device.ID)
+				stored, err := opened.Devices.Get(device.ID)
 				So(err, ShouldBeNil)
 				So(stored.PairedAt, ShouldNotBeNil)
 			})
@@ -427,7 +427,7 @@ func TestPairing(t *testing.T) {
 				_, err := syncer.SyncDevice(device.ID)
 				Convey("Then the sync fails and the device is marked unpaired", func() {
 					So(merry.Is(err, remarkable.ErrNotPaired), ShouldBeTrue)
-					stored, err := opened.GetDevice(device.ID)
+					stored, err := opened.Devices.Get(device.ID)
 					So(err, ShouldBeNil)
 					So(stored.PairedAt, ShouldBeNil)
 				})
@@ -443,7 +443,7 @@ func TestPairing(t *testing.T) {
 				_, err := syncer.SyncDevice(device.ID)
 				Convey("Then the device stays paired", func() {
 					So(merry.Is(err, remarkable.ErrTabletUnreachable), ShouldBeTrue)
-					stored, err := opened.GetDevice(device.ID)
+					stored, err := opened.Devices.Get(device.ID)
 					So(err, ShouldBeNil)
 					So(stored.PairedAt, ShouldNotBeNil)
 				})
@@ -454,7 +454,7 @@ func TestPairing(t *testing.T) {
 			_, err := register()
 			Convey("Then it returns ErrWrongPassword and saves no device", func() {
 				So(merry.Is(err, remarkable.ErrWrongPassword), ShouldBeTrue)
-				devices, err := opened.ListDevices()
+				devices, err := opened.Devices.List()
 				So(err, ShouldBeNil)
 				So(devices, ShouldBeEmpty)
 			})
@@ -468,7 +468,7 @@ func TestPairing(t *testing.T) {
 				So(merry.Is(err, devicesync.ErrDeviceAlreadyRegistered), ShouldBeTrue)
 				So(merry.UserMessage(err), ShouldContainSubstring, "Paper Pro")
 				So(tablet.pairedWith, ShouldBeEmpty)
-				devices, err := opened.ListDevices()
+				devices, err := opened.Devices.List()
 				So(err, ShouldBeNil)
 				So(devices, ShouldHaveLength, 1)
 			})

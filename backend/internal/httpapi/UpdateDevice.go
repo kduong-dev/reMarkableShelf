@@ -22,7 +22,7 @@ func (api *API) UpdateDevice(responseWriter http.ResponseWriter, request *http.R
 	if err != nil {
 		return
 	}
-	device, err := api.store.RenameDevice(mux.Vars(request)["id"], body.Name)
+	device, err := api.store.Devices.Rename(mux.Vars(request)["id"], body.Name)
 	if err != nil {
 		return
 	}

@@ -13,7 +13,7 @@ func (api *API) ListDevices(responseWriter http.ResponseWriter, request *http.Re
 			httpx.SendErrorResponse(responseWriter, err)
 		}
 	}()
-	devices, err := api.store.ListDevices()
+	devices, err := api.store.Devices.List()
 	if err != nil {
 		return
 	}

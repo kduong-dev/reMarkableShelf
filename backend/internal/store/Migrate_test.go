@@ -33,11 +33,11 @@ func TestMigrate(t *testing.T) {
 			Reset(func() { _ = opened.Close() })
 			Convey("Then the page columns are added", func() {
 				pageCount := 544
-				_, err := opened.UpdateBook("book-1", models.Book{PageCount: &pageCount})
+				_, err := opened.Books.Update("book-1", models.Book{PageCount: &pageCount})
 				So(err, ShouldBeNil)
 			})
 			Convey("Then the book is kept with its Google Books ID cleared", func() {
-				book, err := opened.GetBook("book-1")
+				book, err := opened.Books.Get("book-1")
 				So(err, ShouldBeNil)
 				So(book.Title, ShouldEqual, "Dune")
 				So(book.OpenLibraryID, ShouldBeEmpty)

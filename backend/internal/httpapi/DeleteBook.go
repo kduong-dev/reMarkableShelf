@@ -16,7 +16,7 @@ func (api *API) DeleteBook(responseWriter http.ResponseWriter, request *http.Req
 	}()
 	vars := mux.Vars(request)
 	bookID := vars["id"]
-	err = api.store.DeleteBook(bookID)
+	err = api.store.Books.Delete(bookID)
 	if err != nil {
 		return
 	}

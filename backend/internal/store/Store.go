@@ -7,33 +7,39 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// Store wraps the sqlite connection shared by all the *Store method files
-// in this package (BookStore.go, DeviceStore.go, DocumentStore.go).
+// Store is the opened sqlite database, with a store per table it holds.
 type Store struct {
-	DB *sql.DB
+	Books     BookStore
+	Devices   DeviceStore
+	Documents DocumentStore
+	database  *sql.DB
 }
 
 func Open(path string) (*Store, error) {
 	// SQLite ignores the schema's REFERENCES clauses, including ON DELETE
 	// CASCADE and SET NULL, unless foreign keys are switched on per
 	// connection, which the DSN does for every connection the pool opens.
-	db, err := sql.Open("sqlite", path+"?_pragma=foreign_keys(1)")
+	database, err := sql.Open("sqlite", path+"?_pragma=foreign_keys(1)")
 	if err != nil {
 		return nil, merry.Wrap(err)
 	}
-	if err := db.Ping(); err != nil {
+	if err := database.Ping(); err != nil {
 		return nil, merry.Wrap(err)
 	}
 	// xochitl syncs can upsert many rows at once; sqlite only allows one
 	// writer at a time, so keep a single connection to avoid SQLITE_BUSY.
-	db.SetMaxOpenConns(1)
-	s := &Store{DB: db}
-	if err := s.migrate(); err != nil {
+	database.SetMaxOpenConns(1)
+	if err := migrate(database); err != nil {
 		return nil, err
 	}
-	return s, nil
+	return &Store{
+		Books:     &SQLiteBookStore{database: database},
+		Devices:   &SQLiteDeviceStore{database: database},
+		Documents: &SQLiteDocumentStore{database: database},
+		database:  database,
+	}, nil
 }
 
-func (s *Store) Close() error {
-	return s.DB.Close()
+func (store *Store) Close() error {
+	return store.database.Close()
 }

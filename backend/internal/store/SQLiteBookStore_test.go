@@ -20,35 +20,35 @@ func TestBookProgress(t *testing.T) {
 		opened, err := store.Open(filepath.Join(t.TempDir(), "books.db"))
 		So(err, ShouldBeNil)
 		Reset(func() { _ = opened.Close() })
-		book, err := opened.CreateBook(models.Book{Title: "Dune", PageCount: pages(544)})
+		book, err := opened.Books.Create(models.Book{Title: "Dune", PageCount: pages(544)})
 		So(err, ShouldBeNil)
 		Convey("When bookmarking a page within the book", func() {
-			updated, err := opened.UpdateBook(book.ID, models.Book{CurrentPage: pages(120)})
+			updated, err := opened.Books.Update(book.ID, models.Book{CurrentPage: pages(120)})
 			Convey("Then the bookmark is saved and the page count kept", func() {
 				So(err, ShouldBeNil)
 				So(*updated.CurrentPage, ShouldEqual, 120)
-				stored, err := opened.GetBook(book.ID)
+				stored, err := opened.Books.Get(book.ID)
 				So(err, ShouldBeNil)
 				So(*stored.CurrentPage, ShouldEqual, 120)
 				So(*stored.PageCount, ShouldEqual, 544)
 			})
 		})
 		Convey("When bookmarking a page past the end", func() {
-			_, err := opened.UpdateBook(book.ID, models.Book{CurrentPage: pages(545)})
+			_, err := opened.Books.Update(book.ID, models.Book{CurrentPage: pages(545)})
 			Convey("Then it returns ErrCurrentPageOutOfRange", func() {
 				So(merry.Is(err, store.ErrCurrentPageOutOfRange), ShouldBeTrue)
 			})
 		})
 		Convey("When bookmarking a negative page", func() {
-			_, err := opened.UpdateBook(book.ID, models.Book{CurrentPage: pages(-1)})
+			_, err := opened.Books.Update(book.ID, models.Book{CurrentPage: pages(-1)})
 			Convey("Then it returns ErrCurrentPageOutOfRange", func() {
 				So(merry.Is(err, store.ErrCurrentPageOutOfRange), ShouldBeTrue)
 			})
 		})
 		Convey("When changing only the page count of a bookmarked book", func() {
-			_, err := opened.UpdateBook(book.ID, models.Book{CurrentPage: pages(300)})
+			_, err := opened.Books.Update(book.ID, models.Book{CurrentPage: pages(300)})
 			So(err, ShouldBeNil)
-			updated, err := opened.UpdateBook(book.ID, models.Book{PageCount: pages(200)})
+			updated, err := opened.Books.Update(book.ID, models.Book{PageCount: pages(200)})
 			Convey("Then the bookmark keeps its place, the same fraction through", func() {
 				So(err, ShouldBeNil)
 				So(*updated.CurrentPage, ShouldEqual, 110)
@@ -56,16 +56,16 @@ func TestBookProgress(t *testing.T) {
 			})
 		})
 		Convey("When setting a page and a page count it's past the end of", func() {
-			_, err := opened.UpdateBook(book.ID, models.Book{CurrentPage: pages(300), PageCount: pages(200)})
+			_, err := opened.Books.Update(book.ID, models.Book{CurrentPage: pages(300), PageCount: pages(200)})
 			Convey("Then it returns ErrCurrentPageOutOfRange", func() {
 				So(merry.Is(err, store.ErrCurrentPageOutOfRange), ShouldBeTrue)
 			})
 		})
 		Convey("When matching the book to an Open Library edition", func() {
-			updated, err := opened.UpdateBook(book.ID, models.Book{Title: "Dune (Deluxe)", ISBN: "9780593099322", OpenLibraryID: "OL893415W"})
+			updated, err := opened.Books.Update(book.ID, models.Book{Title: "Dune (Deluxe)", ISBN: "9780593099322", OpenLibraryID: "OL893415W"})
 			Convey("Then its ISBN and Open Library ID are saved", func() {
 				So(err, ShouldBeNil)
-				stored, err := opened.GetBook(updated.ID)
+				stored, err := opened.Books.Get(updated.ID)
 				So(err, ShouldBeNil)
 				So(stored.Title, ShouldEqual, "Dune (Deluxe)")
 				So(stored.ISBN, ShouldEqual, "9780593099322")
@@ -73,7 +73,7 @@ func TestBookProgress(t *testing.T) {
 			})
 		})
 		Convey("When setting a page count of zero", func() {
-			_, err := opened.UpdateBook(book.ID, models.Book{PageCount: pages(0)})
+			_, err := opened.Books.Update(book.ID, models.Book{PageCount: pages(0)})
 			Convey("Then it returns ErrInvalidPageCount", func() {
 				So(merry.Is(err, store.ErrInvalidPageCount), ShouldBeTrue)
 			})
@@ -83,10 +83,10 @@ func TestBookProgress(t *testing.T) {
 		opened, err := store.Open(filepath.Join(t.TempDir(), "books.db"))
 		So(err, ShouldBeNil)
 		Reset(func() { _ = opened.Close() })
-		book, err := opened.CreateBook(models.Book{Title: "Meeting notes"})
+		book, err := opened.Books.Create(models.Book{Title: "Meeting notes"})
 		So(err, ShouldBeNil)
 		Convey("When bookmarking any page", func() {
-			updated, err := opened.UpdateBook(book.ID, models.Book{CurrentPage: pages(80)})
+			updated, err := opened.Books.Update(book.ID, models.Book{CurrentPage: pages(80)})
 			Convey("Then the bookmark is saved without a page count", func() {
 				So(err, ShouldBeNil)
 				So(*updated.CurrentPage, ShouldEqual, 80)

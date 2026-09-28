@@ -16,7 +16,7 @@ func (api *API) GetBook(responseWriter http.ResponseWriter, request *http.Reques
 	}()
 	vars := mux.Vars(request)
 	bookID := vars["id"]
-	book, err := api.store.GetBook(bookID)
+	book, err := api.store.Books.Get(bookID)
 	if err != nil {
 		return
 	}

@@ -14,7 +14,7 @@ func (api *API) DeleteDevice(responseWriter http.ResponseWriter, request *http.R
 			httpx.SendErrorResponse(responseWriter, err)
 		}
 	}()
-	err = api.store.DeleteDevice(mux.Vars(request)["id"])
+	err = api.store.Devices.Delete(mux.Vars(request)["id"])
 	if err != nil {
 		return
 	}

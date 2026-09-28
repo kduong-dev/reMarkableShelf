@@ -13,7 +13,7 @@ func (api *API) ListBooks(responseWriter http.ResponseWriter, request *http.Requ
 			httpx.SendErrorResponse(responseWriter, err)
 		}
 	}()
-	books, err := api.store.ListBooks()
+	books, err := api.store.Books.List()
 	if err != nil {
 		return
 	}

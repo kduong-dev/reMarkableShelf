@@ -1,6 +1,10 @@
 package store
 
-import "github.com/ansel1/merry"
+import (
+	"database/sql"
+
+	"github.com/ansel1/merry"
+)
 
 const schema = `
 CREATE TABLE IF NOT EXISTS books (
@@ -76,27 +80,27 @@ var addedColumns = []struct {
 	{"devices", "identity_changed", "INTEGER NOT NULL DEFAULT 0"},
 }
 
-func (s *Store) migrate() error {
-	if err := s.renameGoogleBooksIDColumn(); err != nil {
+func migrate(database *sql.DB) error {
+	if err := renameGoogleBooksIDColumn(database); err != nil {
 		return err
 	}
-	_, err := s.DB.Exec(schema)
+	_, err := database.Exec(schema)
 	if err != nil {
 		return merry.Wrap(err).WithUserMessage("running database migrations")
 	}
 	for _, column := range addedColumns {
-		if err := s.addColumnIfMissing(column.table, column.name, column.definition); err != nil {
+		if err := addColumnIfMissing(database, column.table, column.name, column.definition); err != nil {
 			return err
 		}
 	}
-	return s.removeOrphans()
+	return removeOrphans(database)
 }
 
 // removeOrphans repairs rows left behind while foreign keys weren't
 // enforced: documents linked to deleted books, and documents of deleted
 // devices.
-func (s *Store) removeOrphans() error {
-	_, err := s.DB.Exec(`
+func removeOrphans(database *sql.DB) error {
+	_, err := database.Exec(`
 		UPDATE remarkable_documents SET linked_book_id = NULL
 		 WHERE linked_book_id IS NOT NULL AND linked_book_id NOT IN (SELECT id FROM books);
 		DELETE FROM remarkable_documents WHERE device_id NOT IN (SELECT id FROM devices);`)
@@ -106,9 +110,9 @@ func (s *Store) removeOrphans() error {
 	return nil
 }
 
-func (s *Store) columnExists(table, column string) (bool, error) {
+func columnExists(database *sql.DB, table, column string) (bool, error) {
 	var count int
-	err := s.DB.QueryRow(`SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?`, table, column).Scan(&count)
+	err := database.QueryRow(`SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?`, table, column).Scan(&count)
 	if err != nil {
 		return false, merry.Wrap(err).WithUserMessagef("inspecting %s table", table)
 	}
@@ -117,12 +121,12 @@ func (s *Store) columnExists(table, column string) (bool, error) {
 
 // addColumnIfMissing brings tables created by an older schema up to date,
 // since CREATE TABLE IF NOT EXISTS leaves existing tables untouched.
-func (s *Store) addColumnIfMissing(table, column, definition string) error {
-	exists, err := s.columnExists(table, column)
+func addColumnIfMissing(database *sql.DB, table, column, definition string) error {
+	exists, err := columnExists(database, table, column)
 	if err != nil || exists {
 		return err
 	}
-	_, err = s.DB.Exec(`ALTER TABLE ` + table + ` ADD COLUMN ` + column + ` ` + definition)
+	_, err = database.Exec(`ALTER TABLE ` + table + ` ADD COLUMN ` + column + ` ` + definition)
 	if err != nil {
 		return merry.Wrap(err).WithUserMessagef("adding %s.%s column", table, column)
 	}
@@ -132,12 +136,12 @@ func (s *Store) addColumnIfMissing(table, column, definition string) error {
 // renameGoogleBooksIDColumn upgrades databases created before search moved
 // from Google Books to Open Library. The stored Google volume IDs mean nothing
 // to Open Library, so they are cleared rather than carried over.
-func (s *Store) renameGoogleBooksIDColumn() error {
-	exists, err := s.columnExists("books", "google_books_id")
+func renameGoogleBooksIDColumn(database *sql.DB) error {
+	exists, err := columnExists(database, "books", "google_books_id")
 	if err != nil || !exists {
 		return err
 	}
-	_, err = s.DB.Exec(`ALTER TABLE books RENAME COLUMN google_books_id TO open_library_id; UPDATE books SET open_library_id = ''`)
+	_, err = database.Exec(`ALTER TABLE books RENAME COLUMN google_books_id TO open_library_id; UPDATE books SET open_library_id = ''`)
 	if err != nil {
 		return merry.Wrap(err).WithUserMessage("renaming google_books_id column")
 	}

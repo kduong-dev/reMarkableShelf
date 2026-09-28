@@ -16,7 +16,7 @@ func (api *API) ListDocuments(responseWriter http.ResponseWriter, request *http.
 	}()
 	vars := mux.Vars(request)
 	deviceID := vars["id"]
-	documents, err := api.store.ListDocumentsByDevice(deviceID)
+	documents, err := api.store.Documents.ListByDevice(deviceID)
 	if err != nil {
 		return
 	}

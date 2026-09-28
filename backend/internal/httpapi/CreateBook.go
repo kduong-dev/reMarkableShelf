@@ -22,7 +22,7 @@ func (api *API) CreateBook(responseWriter http.ResponseWriter, request *http.Req
 		return
 	}
 	api.applyEditionPageCount(&body)
-	book, err := api.store.CreateBook(body)
+	book, err := api.store.Books.Create(body)
 	if err != nil {
 		return
 	}

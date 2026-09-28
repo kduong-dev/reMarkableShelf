@@ -24,7 +24,7 @@ func (api *API) UpdateBook(responseWriter http.ResponseWriter, request *http.Req
 	api.applyEditionPageCount(&body)
 	vars := mux.Vars(request)
 	bookID := vars["id"]
-	_, err = api.store.UpdateBook(bookID, body)
+	_, err = api.store.Books.Update(bookID, body)
 	if err != nil {
 		return
 	}
@@ -34,7 +34,7 @@ func (api *API) UpdateBook(responseWriter http.ResponseWriter, request *http.Req
 	if err != nil {
 		return
 	}
-	book, err := api.store.GetBook(bookID)
+	book, err := api.store.Books.Get(bookID)
 	if err != nil {
 		return
 	}

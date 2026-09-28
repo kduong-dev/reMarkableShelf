@@ -2,11 +2,11 @@ package devicesync
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/ansel1/merry"
 	"github.com/kduong-dev/goutil/logx"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/models"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/remarkable"
@@ -39,11 +39,11 @@ func (syncer *Syncer) SyncDevice(deviceID string) ([]models.RemarkableDocument, 
 	}
 	listing, err := syncer.remarkable.ListDocuments(tabletOf(device))
 	switch {
-	case merry.Is(err, remarkable.ErrHostKeyChanged):
+	case errors.Is(err, remarkable.ErrHostKeyChanged):
 		if markErr := syncer.store.Devices.MarkIdentityChanged(device.ID); markErr != nil {
 			return nil, markErr
 		}
-	case merry.Is(err, remarkable.ErrNotPaired) && device.PairedAt != nil:
+	case errors.Is(err, remarkable.ErrNotPaired) && device.PairedAt != nil:
 		if unpairErr := syncer.store.Devices.SetPairedAt(device.ID, nil); unpairErr != nil {
 			return nil, unpairErr
 		}
@@ -127,10 +127,10 @@ type RegisterDeviceInput struct {
 func (syncer *Syncer) RegisterDevice(input RegisterDeviceInput) (models.Device, error) {
 	input.Name, input.Host = strings.TrimSpace(input.Name), strings.TrimSpace(input.Host)
 	if input.Name == "" || input.Host == "" {
-		return models.Device{}, merry.Here(ErrDeviceDetailsRequired)
+		return models.Device{}, ErrDeviceDetailsRequired
 	}
 	if input.Password == "" {
-		return models.Device{}, merry.Here(ErrPasswordRequired)
+		return models.Device{}, ErrPasswordRequired
 	}
 	devices, err := syncer.store.Devices.List()
 	if err != nil {
@@ -138,8 +138,7 @@ func (syncer *Syncer) RegisterDevice(input RegisterDeviceInput) (models.Device, 
 	}
 	for _, device := range devices {
 		if strings.EqualFold(device.Host, input.Host) {
-			return models.Device{}, merry.Here(ErrDeviceAlreadyRegistered).
-				WithUserMessagef("%s is already registered as %q; pair that one again instead of adding it twice", device.Host, device.Name)
+			return models.Device{}, DeviceAlreadyRegisteredError{Host: device.Host, Name: device.Name}
 		}
 	}
 	hostKey, err := syncer.remarkable.Pair(remarkable.Tablet{Host: input.Host}, input.Password)
@@ -162,7 +161,7 @@ type PairDeviceInput struct {
 
 func (syncer *Syncer) PairDevice(input PairDeviceInput) (models.Device, error) {
 	if input.Password == "" {
-		return models.Device{}, merry.Here(ErrPasswordRequired)
+		return models.Device{}, ErrPasswordRequired
 	}
 	device, err := syncer.store.Devices.Get(input.DeviceID)
 	if err != nil {
@@ -173,7 +172,7 @@ func (syncer *Syncer) PairDevice(input PairDeviceInput) (models.Device, error) {
 		tablet.HostKey = ""
 	}
 	hostKey, err := syncer.remarkable.Pair(tablet, input.Password)
-	if merry.Is(err, remarkable.ErrHostKeyChanged) {
+	if errors.Is(err, remarkable.ErrHostKeyChanged) {
 		if markErr := syncer.store.Devices.MarkIdentityChanged(device.ID); markErr != nil {
 			return models.Device{}, markErr
 		}

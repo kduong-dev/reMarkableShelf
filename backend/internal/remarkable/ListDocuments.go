@@ -1,10 +1,10 @@
 package remarkable
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
-	"github.com/ansel1/merry"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/models"
 )
 
@@ -43,7 +43,7 @@ func (client *SSHClient) ListDocuments(tablet Tablet) (Listing, error) {
 	defer connection.Close()
 	output, err := run(connection, "cd '"+client.config.DocumentsDir+"' && "+listScript)
 	if err != nil {
-		return Listing{}, merry.Wrap(err).WithUserMessage("listing the tablet's documents")
+		return Listing{}, fmt.Errorf("listing the tablet's documents: %w", err)
 	}
 	documents, err := ParseListOutput(output)
 	return Listing{Documents: documents, HostKey: hostKey}, err

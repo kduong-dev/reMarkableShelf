@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ansel1/merry"
 	. "github.com/smartystreets/goconvey/convey"
 
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/httpapi"
@@ -27,7 +26,7 @@ func (fake fakeOpenLibrary) Search(input openlibrary.SearchInput) (openlibrary.S
 	if fake.searchInput != nil {
 		*fake.searchInput = input
 	}
-	return openlibrary.SearchResults{}, nil
+	return openlibrary.SearchResults{}, fake.err
 }
 
 func (fake fakeOpenLibrary) EditionPageCount(isbn string) (int, error) {
@@ -64,7 +63,7 @@ func TestCreateBook(t *testing.T) {
 		})
 	})
 	Convey("Given Open Library can't find the edition", t, func() {
-		openLibrary := fakeOpenLibrary{err: merry.Here(openlibrary.ErrEditionNotFound)}
+		openLibrary := fakeOpenLibrary{err: openlibrary.ErrEditionNotFound}
 		Convey("When creating a book with an ISBN and the median page count", func() {
 			book := createBook(t, openLibrary, `{"title": "Dune", "isbn": "9780441013593", "pageCount": 608}`)
 			Convey("Then the book is still created with the median", func() {
@@ -73,7 +72,7 @@ func TestCreateBook(t *testing.T) {
 		})
 	})
 	Convey("Given Open Library is unavailable", t, func() {
-		openLibrary := fakeOpenLibrary{err: merry.Here(openlibrary.ErrUpstreamUnavailable)}
+		openLibrary := fakeOpenLibrary{err: openlibrary.ErrUpstreamUnavailable}
 		Convey("When creating a book with an ISBN", func() {
 			book := createBook(t, openLibrary, `{"title": "Dune", "isbn": "9780441013593"}`)
 			Convey("Then the book is still created without a page count", func() {

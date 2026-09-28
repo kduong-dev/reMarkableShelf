@@ -1,8 +1,10 @@
 package httpapi
 
 import (
+	"errors"
 	"net/http"
 
+	"github.com/ansel1/merry"
 	"github.com/kduong-dev/goutil/httpx"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/devicesync"
 )
@@ -31,6 +33,11 @@ func (api *API) CreateDevice(responseWriter http.ResponseWriter, request *http.R
 		Host:     body.Host,
 		Password: body.Password,
 	})
+	var alreadyRegistered devicesync.DeviceAlreadyRegisteredError
+	if errors.As(err, &alreadyRegistered) {
+		err = merry.Wrap(err).WithHTTPCode(http.StatusConflict).
+			WithUserMessagef("%s is already registered as %q; pair that one again instead of adding it twice", alreadyRegistered.Host, alreadyRegistered.Name)
+	}
 	if err != nil {
 		return
 	}

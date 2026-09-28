@@ -2,21 +2,25 @@ package httpapi_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/ansel1/merry"
 	. "github.com/smartystreets/goconvey/convey"
 
 	"github.com/kduong-dev/goutil/httpx"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/devicesync"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/httpapi"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/models"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/openlibrary"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/store"
 )
 
-func TestStoreErrorResponses(t *testing.T) {
+func TestErrorResponses(t *testing.T) {
 	Convey("Given the API holding a 544-page book", t, func() {
 		opened, err := store.Open(filepath.Join(t.TempDir(), "books.db"))
 		So(err, ShouldBeNil)
@@ -24,7 +28,14 @@ func TestStoreErrorResponses(t *testing.T) {
 		pageCount := 544
 		book, err := opened.Books.Create(models.Book{Title: "Dune", PageCount: &pageCount})
 		So(err, ShouldBeNil)
-		handler := httpapi.NewHandler(httpapi.NewHandlerInput{Store: opened, OpenLibrary: fakeOpenLibrary{}})
+		device, err := opened.Devices.Create(models.Device{Name: "Paper Pro", Host: "10.0.0.5"})
+		So(err, ShouldBeNil)
+		// Every request below fails before reaching a tablet.
+		handler := httpapi.NewHandler(httpapi.NewHandlerInput{
+			Store:       opened,
+			OpenLibrary: fakeOpenLibrary{},
+			Syncer:      devicesync.NewSyncer(opened, nil),
+		})
 		send := func(method, path, body string) (int, string) {
 			recorder := httptest.NewRecorder()
 			handler.ServeHTTP(recorder, httptest.NewRequest(method, path, strings.NewReader(body)))
@@ -58,6 +69,48 @@ func TestStoreErrorResponses(t *testing.T) {
 			Convey("Then it responds not found", func() {
 				So(statusCode, ShouldEqual, http.StatusNotFound)
 				So(message, ShouldEqual, "that document has no synced cover")
+			})
+		})
+		Convey("When registering a device without a password", func() {
+			statusCode, message := send(http.MethodPost, "/api/devices", `{"name": "Move", "host": "10.0.0.6"}`)
+			Convey("Then it responds bad request", func() {
+				So(statusCode, ShouldEqual, http.StatusBadRequest)
+				So(message, ShouldEqual, "enter the tablet's password to pair it")
+			})
+		})
+		Convey("When registering the host of a device already registered", func() {
+			statusCode, message := send(http.MethodPost, "/api/devices", `{"name": "Move", "host": "`+device.Host+`", "password": "secret"}`)
+			Convey("Then it responds conflict, naming the registered device", func() {
+				So(statusCode, ShouldEqual, http.StatusConflict)
+				So(message, ShouldContainSubstring, `already registered as "Paper Pro"`)
+			})
+		})
+	})
+	Convey("Given Open Library fails a search", t, func() {
+		opened, err := store.Open(filepath.Join(t.TempDir(), "books.db"))
+		So(err, ShouldBeNil)
+		Reset(func() { _ = opened.Close() })
+		search := func(openLibraryErr error) (int, string) {
+			handler := httpapi.NewHandler(httpapi.NewHandlerInput{Store: opened, OpenLibrary: fakeOpenLibrary{err: openLibraryErr}})
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/search/books?q=dune", nil))
+			var message httpx.ResponseMessage
+			So(json.Unmarshal(recorder.Body.Bytes(), &message), ShouldBeNil)
+			return recorder.Code, message.Message
+		}
+		Convey("When the query is too short", func() {
+			statusCode, message := search(openlibrary.ErrQueryTooShort)
+			Convey("Then it responds bad request", func() {
+				So(statusCode, ShouldEqual, http.StatusBadRequest)
+				So(message, ShouldEqual, "search for at least 3 characters")
+			})
+		})
+		Convey("When Open Library responds with an error of its own", func() {
+			upstream := merry.New("request failed with status 401").WithHTTPCode(http.StatusUnauthorized).WithUserMessage("Unauthorized")
+			statusCode, message := search(fmt.Errorf("%w: %w", openlibrary.ErrUpstreamUnavailable, upstream))
+			Convey("Then it responds bad gateway rather than passing Open Library's status on", func() {
+				So(statusCode, ShouldEqual, http.StatusBadGateway)
+				So(message, ShouldEqual, "Open Library is unavailable, try again shortly")
 			})
 		})
 	})

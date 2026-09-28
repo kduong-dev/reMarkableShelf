@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ansel1/merry"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -68,7 +67,7 @@ func (client *SSHClient) Pair(tablet Tablet, password string) (string, error) {
 	}
 	defer connection.Close()
 	if _, err := run(connection, fmt.Sprintf(installKeyScript, authorizedKey(client.config.Signer))); err != nil {
-		return "", merry.Wrap(err).WithUserMessage("installing this server's key on the tablet")
+		return "", fmt.Errorf("installing this server's key on the tablet: %w", err)
 	}
 	verified, _, err := client.dial(Tablet{Host: tablet.Host, HostKey: hostKey}, ssh.PublicKeys(client.config.Signer), ErrKeyNotAccepted)
 	if err != nil {
@@ -115,7 +114,7 @@ func (client *SSHClient) dial(tablet Tablet, auth ssh.AuthMethod, authSentinel e
 	case strings.Contains(err.Error(), "unable to authenticate"):
 		sentinel = authSentinel
 	}
-	return nil, "", merry.WithCause(merry.Here(sentinel).WithUserMessagef("%s (%s)", merry.UserMessage(sentinel), addr), err)
+	return nil, "", fmt.Errorf("%w (%s): %w", sentinel, addr, err)
 }
 
 // sameKey reports whether key is the one recorded as authorized, a line in
@@ -129,14 +128,14 @@ func sameKey(authorized string, key ssh.PublicKey) bool {
 func run(connection *ssh.Client, script string) (string, error) {
 	session, err := connection.NewSession()
 	if err != nil {
-		return "", merry.Wrap(err).WithUserMessage("opening SSH session")
+		return "", fmt.Errorf("opening SSH session: %w", err)
 	}
 	defer session.Close()
 	var stdout, stderr bytes.Buffer
 	session.Stdout = &stdout
 	session.Stderr = &stderr
 	if err := session.Run(script); err != nil {
-		return "", merry.Prependf(err, "running script (stderr: %s)", strings.TrimSpace(stderr.String()))
+		return "", fmt.Errorf("running script (stderr: %s): %w", strings.TrimSpace(stderr.String()), err)
 	}
 	return stdout.String(), nil
 }

@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ansel1/merry"
 	"github.com/kduong-dev/goutil/fatal"
 	"github.com/kduong-dev/goutil/httpx"
 )
@@ -109,7 +108,7 @@ func (api *APIClient) getJSON(requestURL string, sentinelByStatusCode map[int]er
 	request.Header.Set("User-Agent", userAgent)
 	response, err := api.httpClient.Do(request)
 	if err != nil {
-		return merry.WithCause(merry.Here(ErrUpstreamUnavailable), err)
+		return fmt.Errorf("%w: %w", ErrUpstreamUnavailable, err)
 	}
 	defer httpx.DrainAndClose(response.Body)
 	if response.StatusCode != http.StatusOK {
@@ -117,10 +116,10 @@ func (api *APIClient) getJSON(requestURL string, sentinelByStatusCode map[int]er
 		if !ok {
 			sentinel = ErrUpstreamUnavailable
 		}
-		return merry.WithCause(merry.Here(sentinel), httpx.ResponseError(response))
+		return fmt.Errorf("%w: %w", sentinel, httpx.ResponseError(response))
 	}
 	if err := json.NewDecoder(response.Body).Decode(output); err != nil {
-		return merry.WithCause(merry.Here(ErrUpstreamUnavailable), err)
+		return fmt.Errorf("%w: %w", ErrUpstreamUnavailable, err)
 	}
 	return nil
 }

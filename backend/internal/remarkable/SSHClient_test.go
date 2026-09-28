@@ -2,6 +2,7 @@ package remarkable_test
 
 import (
 	"bytes"
+	"errors"
 	"net"
 	"os"
 	"os/exec"
@@ -9,7 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ansel1/merry"
 	. "github.com/smartystreets/goconvey/convey"
 	"golang.org/x/crypto/ssh"
 
@@ -38,7 +38,7 @@ func startFakeTablet(t *testing.T, password string) *fakeTablet {
 		PasswordCallback: func(_ ssh.ConnMetadata, attempt []byte) (*ssh.Permissions, error) {
 			tablet.passwordAttempts++
 			if string(attempt) != tablet.password {
-				return nil, merry.New("wrong password")
+				return nil, errors.New("wrong password")
 			}
 			return nil, nil
 		},
@@ -54,7 +54,7 @@ func startFakeTablet(t *testing.T, password string) *fakeTablet {
 				}
 				authorized = rest
 			}
-			return nil, merry.New("unknown key")
+			return nil, errors.New("unknown key")
 		},
 	}
 	serverConfig.AddHostKey(hostKey)
@@ -152,23 +152,21 @@ func TestPair(t *testing.T) {
 			Convey("Then the key alone gets past sign-in when listing documents", func() {
 				tablet.password = "changed"
 				_, err := client.ListDocuments(remarkable.Tablet{Host: tablet.host})
-				So(merry.Is(err, remarkable.ErrNotPaired), ShouldBeFalse)
-				So(merry.Is(err, remarkable.ErrTabletUnreachable), ShouldBeFalse)
+				So(errors.Is(err, remarkable.ErrNotPaired), ShouldBeFalse)
+				So(errors.Is(err, remarkable.ErrTabletUnreachable), ShouldBeFalse)
 			})
 		})
 		Convey("When pairing with the wrong password", func() {
 			_, err := client.Pair(remarkable.Tablet{Host: tablet.host}, "guess")
 			Convey("Then it returns ErrWrongPassword as a client error and installs nothing", func() {
-				So(merry.Is(err, remarkable.ErrWrongPassword), ShouldBeTrue)
-				So(merry.HTTPCode(err), ShouldEqual, 400)
+				So(errors.Is(err, remarkable.ErrWrongPassword), ShouldBeTrue)
 				So(tablet.authorizedKeys(), ShouldBeEmpty)
 			})
 		})
 		Convey("When listing documents without having paired", func() {
 			_, err := client.ListDocuments(remarkable.Tablet{Host: tablet.host})
 			Convey("Then it returns ErrNotPaired", func() {
-				So(merry.Is(err, remarkable.ErrNotPaired), ShouldBeTrue)
-				So(merry.UserMessage(err), ShouldContainSubstring, "pair it again")
+				So(errors.Is(err, remarkable.ErrNotPaired), ShouldBeTrue)
 			})
 		})
 	})
@@ -181,8 +179,7 @@ func TestPair(t *testing.T) {
 		Convey("When listing its documents", func() {
 			_, err := client.ListDocuments(remarkable.Tablet{Host: host})
 			Convey("Then it returns ErrTabletUnreachable", func() {
-				So(merry.Is(err, remarkable.ErrTabletUnreachable), ShouldBeTrue)
-				So(merry.UserMessage(err), ShouldContainSubstring, "may be asleep")
+				So(errors.Is(err, remarkable.ErrTabletUnreachable), ShouldBeTrue)
 			})
 		})
 	})
@@ -200,8 +197,8 @@ func TestHostKeyPinning(t *testing.T) {
 		Convey("When connecting with that host key recorded", func() {
 			_, err := client.ListDocuments(remarkable.Tablet{Host: tablet.host, HostKey: hostKey})
 			Convey("Then the tablet is accepted", func() {
-				So(merry.Is(err, remarkable.ErrHostKeyChanged), ShouldBeFalse)
-				So(merry.Is(err, remarkable.ErrNotPaired), ShouldBeFalse)
+				So(errors.Is(err, remarkable.ErrHostKeyChanged), ShouldBeFalse)
+				So(errors.Is(err, remarkable.ErrNotPaired), ShouldBeFalse)
 			})
 		})
 		Convey("And another machine answers at the address with a different host key", func() {
@@ -211,14 +208,13 @@ func TestHostKeyPinning(t *testing.T) {
 			Convey("When syncing", func() {
 				_, err := impostorClient.ListDocuments(pinned)
 				Convey("Then it returns ErrHostKeyChanged", func() {
-					So(merry.Is(err, remarkable.ErrHostKeyChanged), ShouldBeTrue)
-					So(merry.UserMessage(err), ShouldContainSubstring, "impersonating")
+					So(errors.Is(err, remarkable.ErrHostKeyChanged), ShouldBeTrue)
 				})
 			})
 			Convey("When pairing again with the password", func() {
 				_, err := impostorClient.Pair(pinned, "secret")
 				Convey("Then it refuses before the password is ever sent", func() {
-					So(merry.Is(err, remarkable.ErrHostKeyChanged), ShouldBeTrue)
+					So(errors.Is(err, remarkable.ErrHostKeyChanged), ShouldBeTrue)
 					So(impostor.passwordAttempts, ShouldEqual, 0)
 				})
 			})

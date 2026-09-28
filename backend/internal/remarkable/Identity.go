@@ -5,11 +5,11 @@ import (
 	"crypto/rand"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
 
-	"github.com/ansel1/merry"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -25,26 +25,26 @@ func LoadOrCreateSigner(path string) (ssh.Signer, error) {
 	if err == nil {
 		signer, err := ssh.ParsePrivateKey(pemBytes)
 		if err != nil {
-			return nil, merry.Wrap(err).WithUserMessagef("reading SSH key %s", path)
+			return nil, fmt.Errorf("reading SSH key %s: %w", path, err)
 		}
 		return signer, nil
 	}
 	if !errors.Is(err, fs.ErrNotExist) {
-		return nil, merry.Wrap(err)
+		return nil, err
 	}
 	_, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
-		return nil, merry.Wrap(err)
+		return nil, err
 	}
 	block, err := ssh.MarshalPrivateKey(privateKey, keyComment)
 	if err != nil {
-		return nil, merry.Wrap(err)
+		return nil, err
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return nil, merry.Wrap(err)
+		return nil, err
 	}
 	if err := os.WriteFile(path, pem.EncodeToMemory(block), 0o600); err != nil {
-		return nil, merry.Wrap(err).WithUserMessagef("saving SSH key %s", path)
+		return nil, fmt.Errorf("saving SSH key %s: %w", path, err)
 	}
 	return ssh.NewSignerFromKey(privateKey)
 }

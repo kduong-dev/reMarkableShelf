@@ -1,13 +1,13 @@
 package openlibrary_test
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
 
-	"github.com/ansel1/merry"
 	. "github.com/smartystreets/goconvey/convey"
 
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/openlibrary"
@@ -20,7 +20,7 @@ func TestSearch(t *testing.T) {
 			results, err := client.Search(openlibrary.SearchInput{Query: ""})
 			Convey("Then it returns ErrEmptyQuery without making a request", func() {
 				So(results.Results, ShouldBeEmpty)
-				So(merry.Is(err, openlibrary.ErrEmptyQuery), ShouldBeTrue)
+				So(errors.Is(err, openlibrary.ErrEmptyQuery), ShouldBeTrue)
 			})
 		})
 	})
@@ -30,9 +30,7 @@ func TestSearch(t *testing.T) {
 			results, err := client.Search(openlibrary.SearchInput{Query: "  ab  "})
 			Convey("Then it returns ErrQueryTooShort without making a request", func() {
 				So(results.Results, ShouldBeEmpty)
-				So(merry.Is(err, openlibrary.ErrQueryTooShort), ShouldBeTrue)
-				So(merry.HTTPCode(err), ShouldEqual, http.StatusBadRequest)
-				So(merry.UserMessage(err), ShouldEqual, "search for at least 3 characters")
+				So(errors.Is(err, openlibrary.ErrQueryTooShort), ShouldBeTrue)
 			})
 		})
 	})
@@ -46,8 +44,7 @@ func TestSearch(t *testing.T) {
 			results, err := client.Search(openlibrary.SearchInput{Query: "the"})
 			Convey("Then it returns ErrQueryRejected as a client error", func() {
 				So(results.Results, ShouldBeEmpty)
-				So(merry.Is(err, openlibrary.ErrQueryRejected), ShouldBeTrue)
-				So(merry.HTTPCode(err), ShouldEqual, http.StatusBadRequest)
+				So(errors.Is(err, openlibrary.ErrQueryRejected), ShouldBeTrue)
 			})
 		})
 	})
@@ -61,8 +58,7 @@ func TestSearch(t *testing.T) {
 			results, err := client.Search(openlibrary.SearchInput{Query: "dune"})
 			Convey("Then it returns ErrUpstreamUnavailable, keeping the upstream status for the logs", func() {
 				So(results.Results, ShouldBeEmpty)
-				So(merry.Is(err, openlibrary.ErrUpstreamUnavailable), ShouldBeTrue)
-				So(merry.HTTPCode(err), ShouldEqual, http.StatusBadGateway)
+				So(errors.Is(err, openlibrary.ErrUpstreamUnavailable), ShouldBeTrue)
 				So(fmt.Sprintf("%v", err), ShouldContainSubstring, "status 429")
 			})
 		})
@@ -128,7 +124,7 @@ func TestEditionPageCount(t *testing.T) {
 			pageCount, err := client.EditionPageCount("")
 			Convey("Then it returns ErrEmptyISBN without making a request", func() {
 				So(pageCount, ShouldEqual, 0)
-				So(merry.Is(err, openlibrary.ErrEmptyISBN), ShouldBeTrue)
+				So(errors.Is(err, openlibrary.ErrEmptyISBN), ShouldBeTrue)
 			})
 		})
 	})
@@ -165,7 +161,7 @@ func TestEditionPageCount(t *testing.T) {
 			pageCount, err := client.EditionPageCount("9780000000001")
 			Convey("Then it returns ErrEditionNotFound", func() {
 				So(pageCount, ShouldEqual, 0)
-				So(merry.Is(err, openlibrary.ErrEditionNotFound), ShouldBeTrue)
+				So(errors.Is(err, openlibrary.ErrEditionNotFound), ShouldBeTrue)
 			})
 		})
 	})
@@ -244,38 +240,37 @@ func TestSearchFilters(t *testing.T) {
 		Convey("When searching with an unknown sort", func() {
 			_, err := client.Search(openlibrary.SearchInput{Query: "le guin", Sort: "pages"})
 			Convey("Then it returns ErrInvalidSort", func() {
-				So(merry.Is(err, openlibrary.ErrInvalidSort), ShouldBeTrue)
+				So(errors.Is(err, openlibrary.ErrInvalidSort), ShouldBeTrue)
 			})
 		})
 		Convey("When searching with a malformed language", func() {
 			_, err := client.Search(openlibrary.SearchInput{Query: "le guin", Language: "eng language:fre"})
 			Convey("Then it returns ErrInvalidLanguage rather than injecting a clause", func() {
-				So(merry.Is(err, openlibrary.ErrInvalidLanguage), ShouldBeTrue)
+				So(errors.Is(err, openlibrary.ErrInvalidLanguage), ShouldBeTrue)
 			})
 		})
 		Convey("When searching with neither a query nor a subject", func() {
 			_, err := client.Search(openlibrary.SearchInput{Sort: openlibrary.SortRating})
 			Convey("Then it returns ErrEmptyQuery", func() {
-				So(merry.Is(err, openlibrary.ErrEmptyQuery), ShouldBeTrue)
+				So(errors.Is(err, openlibrary.ErrEmptyQuery), ShouldBeTrue)
 			})
 		})
 		Convey("When the subject tries to close its quotes and add a clause", func() {
 			_, err := client.Search(openlibrary.SearchInput{Subject: `fantasy" OR author:"x`})
 			Convey("Then it returns ErrInvalidSubject", func() {
-				So(merry.Is(err, openlibrary.ErrInvalidSubject), ShouldBeTrue)
+				So(errors.Is(err, openlibrary.ErrInvalidSubject), ShouldBeTrue)
 			})
 		})
 		Convey("When asking for a negative page", func() {
 			_, err := client.Search(openlibrary.SearchInput{Query: "le guin", Page: -1})
 			Convey("Then it returns ErrInvalidPage", func() {
-				So(merry.Is(err, openlibrary.ErrInvalidPage), ShouldBeTrue)
+				So(errors.Is(err, openlibrary.ErrInvalidPage), ShouldBeTrue)
 			})
 		})
 		Convey("When searching with a reversed year range", func() {
 			_, err := client.Search(openlibrary.SearchInput{Query: "le guin", PublishedFrom: 1980, PublishedTo: 1960})
 			Convey("Then it returns ErrInvalidYearRange", func() {
-				So(merry.Is(err, openlibrary.ErrInvalidYearRange), ShouldBeTrue)
-				So(merry.HTTPCode(err), ShouldEqual, http.StatusBadRequest)
+				So(errors.Is(err, openlibrary.ErrInvalidYearRange), ShouldBeTrue)
 			})
 		})
 	})

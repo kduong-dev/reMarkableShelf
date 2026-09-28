@@ -5,8 +5,6 @@ import (
 	"regexp"
 	"strings"
 	"unicode/utf8"
-
-	"github.com/ansel1/merry"
 )
 
 type Sort string
@@ -47,25 +45,25 @@ func (input SearchInput) validate() error {
 		return ErrEmptyQuery
 	}
 	if input.Query != "" && utf8.RuneCountInString(input.Query) < MinimumQueryLength {
-		return merry.Here(ErrQueryTooShort)
+		return ErrQueryTooShort
 	}
 	if input.Subject != "" && !subjectPattern.MatchString(input.Subject) {
-		return merry.Here(ErrInvalidSubject).WithMessagef("invalid subject %q", input.Subject)
+		return fmt.Errorf("%w %q", ErrInvalidSubject, input.Subject)
 	}
 	if input.Page < 0 {
-		return merry.Here(ErrInvalidPage).WithMessagef("invalid page %d", input.Page)
+		return fmt.Errorf("%w %d", ErrInvalidPage, input.Page)
 	}
 	switch input.Sort {
 	case SortRelevance, SortRating, SortNewest, SortOldest:
 	default:
-		return merry.Here(ErrInvalidSort).WithMessagef("unknown sort %q", input.Sort)
+		return fmt.Errorf("%w %q", ErrInvalidSort, input.Sort)
 	}
 	if input.Language != "" && !languagePattern.MatchString(input.Language) {
-		return merry.Here(ErrInvalidLanguage).WithMessagef("invalid language %q", input.Language)
+		return fmt.Errorf("%w %q", ErrInvalidLanguage, input.Language)
 	}
 	if input.PublishedFrom < 0 || input.PublishedTo < 0 ||
 		(input.PublishedFrom != 0 && input.PublishedTo != 0 && input.PublishedFrom > input.PublishedTo) {
-		return merry.Here(ErrInvalidYearRange).WithMessagef("invalid year range %d to %d", input.PublishedFrom, input.PublishedTo)
+		return fmt.Errorf("%w %d to %d", ErrInvalidYearRange, input.PublishedFrom, input.PublishedTo)
 	}
 	return nil
 }

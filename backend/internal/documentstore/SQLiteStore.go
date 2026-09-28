@@ -1,4 +1,4 @@
-package store
+package documentstore
 
 import (
 	"database/sql"
@@ -9,11 +9,15 @@ import (
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/models"
 )
 
-type SQLiteDocumentStore struct {
+type SQLiteStore struct {
 	database *sql.DB
 }
 
-func (documentStore *SQLiteDocumentStore) Upsert(deviceID string, docs []models.RemarkableDocument) error {
+func NewSQLiteStore(database *sql.DB) *SQLiteStore {
+	return &SQLiteStore{database: database}
+}
+
+func (documentStore *SQLiteStore) Upsert(deviceID string, docs []models.RemarkableDocument) error {
 	tx, err := documentStore.database.Begin()
 	if err != nil {
 		return merry.Wrap(err)
@@ -42,15 +46,15 @@ func (documentStore *SQLiteDocumentStore) Upsert(deviceID string, docs []models.
 	return merry.Wrap(tx.Commit())
 }
 
-func (documentStore *SQLiteDocumentStore) ListByDevice(deviceID string) ([]models.RemarkableDocument, error) {
+func (documentStore *SQLiteStore) ListByDevice(deviceID string) ([]models.RemarkableDocument, error) {
 	return documentStore.list(`device_id = ?`, deviceID)
 }
 
-func (documentStore *SQLiteDocumentStore) ListByBook(bookID string) ([]models.RemarkableDocument, error) {
+func (documentStore *SQLiteStore) ListByBook(bookID string) ([]models.RemarkableDocument, error) {
 	return documentStore.list(`linked_book_id = ?`, bookID)
 }
 
-func (documentStore *SQLiteDocumentStore) list(where, arg string) ([]models.RemarkableDocument, error) {
+func (documentStore *SQLiteStore) list(where, arg string) ([]models.RemarkableDocument, error) {
 	rows, err := documentStore.database.Query(
 		`SELECT uuid, device_id, title, file_type, last_modified, linked_book_id, current_page, page_count, position_updated_at, book_title, book_author, auto_link_dismissed, cover_image IS NOT NULL, cover_checked_at
 		 FROM remarkable_documents WHERE `+where+` ORDER BY last_modified DESC`,
@@ -72,7 +76,7 @@ func (documentStore *SQLiteDocumentStore) list(where, arg string) ([]models.Rema
 	return docs, merry.Wrap(rows.Err())
 }
 
-func (documentStore *SQLiteDocumentStore) LinkToBook(deviceID, docUUID, bookID string) error {
+func (documentStore *SQLiteStore) LinkToBook(deviceID, docUUID, bookID string) error {
 	_, err := documentStore.database.Exec(
 		`UPDATE remarkable_documents SET linked_book_id = ?, auto_link_dismissed = 0 WHERE device_id = ? AND uuid = ?`,
 		bookID, deviceID, docUUID,
@@ -80,7 +84,7 @@ func (documentStore *SQLiteDocumentStore) LinkToBook(deviceID, docUUID, bookID s
 	return merry.Wrap(err)
 }
 
-func (documentStore *SQLiteDocumentStore) Unlink(deviceID, docUUID string) error {
+func (documentStore *SQLiteStore) Unlink(deviceID, docUUID string) error {
 	result, err := documentStore.database.Exec(
 		`UPDATE remarkable_documents SET linked_book_id = NULL, auto_link_dismissed = 1 WHERE device_id = ? AND uuid = ?`,
 		deviceID, docUUID,
@@ -94,7 +98,7 @@ func (documentStore *SQLiteDocumentStore) Unlink(deviceID, docUUID string) error
 	return nil
 }
 
-func (documentStore *SQLiteDocumentStore) SetCover(deviceID, docUUID string, image []byte, checkedAt time.Time) error {
+func (documentStore *SQLiteStore) SetCover(deviceID, docUUID string, image []byte, checkedAt time.Time) error {
 	_, err := documentStore.database.Exec(
 		`UPDATE remarkable_documents SET cover_image = COALESCE(?, cover_image), cover_checked_at = ? WHERE device_id = ? AND uuid = ?`,
 		image, checkedAt, deviceID, docUUID,
@@ -102,7 +106,7 @@ func (documentStore *SQLiteDocumentStore) SetCover(deviceID, docUUID string, ima
 	return merry.Wrap(err)
 }
 
-func (documentStore *SQLiteDocumentStore) GetCover(deviceID, docUUID string) ([]byte, error) {
+func (documentStore *SQLiteStore) GetCover(deviceID, docUUID string) ([]byte, error) {
 	var image []byte
 	err := documentStore.database.QueryRow(
 		`SELECT cover_image FROM remarkable_documents WHERE device_id = ? AND uuid = ? AND cover_image IS NOT NULL`,

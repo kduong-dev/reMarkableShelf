@@ -1,8 +1,8 @@
 package devicesync
 
 import (
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/bookstore"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/models"
-	"github.com/kduong-dev/reMarkableShelf/backend/internal/store"
 )
 
 // tabletProgress decides whether a document's position on the tablet should
@@ -14,22 +14,22 @@ import (
 //
 // A linked book is read on the tablet, so it takes the tablet's pages as its
 // own and the position carries over page for page.
-func tabletProgress(book models.Book, document models.RemarkableDocument) (store.SetTabletProgressInput, bool) {
+func tabletProgress(book models.Book, document models.RemarkableDocument) (bookstore.SetTabletProgressInput, bool) {
 	if document.CurrentPage == nil || document.PageCount == nil || document.PositionUpdatedAt == nil {
-		return store.SetTabletProgressInput{}, false
+		return bookstore.SetTabletProgressInput{}, false
 	}
 	if book.ProgressUpdatedAt != nil && !document.PositionUpdatedAt.After(*book.ProgressUpdatedAt) {
-		return store.SetTabletProgressInput{}, false
+		return bookstore.SetTabletProgressInput{}, false
 	}
 	if book.Status == models.StatusFinished {
-		return store.SetTabletProgressInput{}, false
+		return bookstore.SetTabletProgressInput{}, false
 	}
 	pageCount, currentPage := *document.PageCount, *document.CurrentPage
 	status := models.StatusReading
 	if currentPage >= pageCount {
 		status = models.StatusFinished
 	}
-	return store.SetTabletProgressInput{
+	return bookstore.SetTabletProgressInput{
 		BookID:      book.ID,
 		CurrentPage: currentPage,
 		PageCount:   pageCount,

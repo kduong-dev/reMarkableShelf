@@ -1,4 +1,4 @@
-package store
+package bookstore
 
 import (
 	"database/sql"
@@ -7,6 +7,7 @@ import (
 
 	"github.com/ansel1/merry"
 	"github.com/google/uuid"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/database"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/models"
 )
 
@@ -19,11 +20,15 @@ const selectBooks = `SELECT id, title, author, isbn, cover_url, status, rating, 
 	(SELECT page_count FROM remarkable_documents WHERE linked_book_id = books.id AND page_count IS NOT NULL LIMIT 1)
 	FROM books`
 
-type SQLiteBookStore struct {
+type SQLiteStore struct {
 	database *sql.DB
 }
 
-func (bookStore *SQLiteBookStore) List() ([]models.Book, error) {
+func NewSQLiteStore(database *sql.DB) *SQLiteStore {
+	return &SQLiteStore{database: database}
+}
+
+func (bookStore *SQLiteStore) List() ([]models.Book, error) {
 	rows, err := bookStore.database.Query(selectBooks + ` ORDER BY updated_at DESC`)
 	if err != nil {
 		return nil, merry.Wrap(err)
@@ -41,7 +46,7 @@ func (bookStore *SQLiteBookStore) List() ([]models.Book, error) {
 	return books, merry.Wrap(rows.Err())
 }
 
-func (bookStore *SQLiteBookStore) Get(id string) (models.Book, error) {
+func (bookStore *SQLiteStore) Get(id string) (models.Book, error) {
 	row := bookStore.database.QueryRow(selectBooks+` WHERE id = ?`, id)
 	book, err := scanBook(row)
 	if err == sql.ErrNoRows {
@@ -50,7 +55,7 @@ func (bookStore *SQLiteBookStore) Get(id string) (models.Book, error) {
 	return book, err
 }
 
-func (bookStore *SQLiteBookStore) Create(book models.Book) (models.Book, error) {
+func (bookStore *SQLiteStore) Create(book models.Book) (models.Book, error) {
 	if book.ID == "" {
 		book.ID = uuid.NewString()
 	}
@@ -81,7 +86,7 @@ func (bookStore *SQLiteBookStore) Create(book models.Book) (models.Book, error) 
 	return book, nil
 }
 
-func (bookStore *SQLiteBookStore) Update(id string, patch models.Book) (models.Book, error) {
+func (bookStore *SQLiteStore) Update(id string, patch models.Book) (models.Book, error) {
 	existing, err := bookStore.Get(id)
 	if err != nil {
 		return models.Book{}, err
@@ -135,7 +140,7 @@ func (bookStore *SQLiteBookStore) Update(id string, patch models.Book) (models.B
 	return existing, nil
 }
 
-func (bookStore *SQLiteBookStore) SetTabletProgress(input SetTabletProgressInput) (models.Book, error) {
+func (bookStore *SQLiteStore) SetTabletProgress(input SetTabletProgressInput) (models.Book, error) {
 	book, err := bookStore.Get(input.BookID)
 	if err != nil {
 		return models.Book{}, err
@@ -156,7 +161,7 @@ func (bookStore *SQLiteBookStore) SetTabletProgress(input SetTabletProgressInput
 	return book, nil
 }
 
-func (bookStore *SQLiteBookStore) Delete(id string) error {
+func (bookStore *SQLiteStore) Delete(id string) error {
 	res, err := bookStore.database.Exec(`DELETE FROM books WHERE id = ?`, id)
 	if err != nil {
 		return merry.Wrap(err).WithUserMessage("deleting book")
@@ -182,11 +187,7 @@ func validateProgress(book models.Book) error {
 	return nil
 }
 
-type rowScanner interface {
-	Scan(dest ...any) error
-}
-
-func scanBook(row rowScanner) (models.Book, error) {
+func scanBook(row database.RowScanner) (models.Book, error) {
 	var b models.Book
 	var tabletCoverURL sql.NullString
 	err := row.Scan(&b.ID, &b.Title, &b.Author, &b.ISBN, &b.CoverURL, &b.Status, &b.Rating, &b.Source, &b.OpenLibraryID, &b.PageCount, &b.CurrentPage, &b.ProgressUpdatedAt, &b.ProgressSource, &b.CreatedAt, &b.UpdatedAt, &tabletCoverURL, &b.TabletPageCount)

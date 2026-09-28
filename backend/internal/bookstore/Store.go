@@ -1,4 +1,4 @@
-package store
+package bookstore
 
 import (
 	"time"
@@ -6,9 +6,9 @@ import (
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/models"
 )
 
-// BookStore holds the books on the user's shelf. Each book also carries the
+// Store holds the books on the user's shelf. Each book also carries the
 // cover and page count of any tablet document linked to it.
-type BookStore interface {
+type Store interface {
 	List() ([]models.Book, error)
 	Get(id string) (models.Book, error)
 	// Create inserts a new book, generating an id/timestamps if unset.

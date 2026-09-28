@@ -1,4 +1,4 @@
-package store
+package devicestore
 
 import (
 	"database/sql"
@@ -8,14 +8,19 @@ import (
 
 	"github.com/ansel1/merry"
 	"github.com/google/uuid"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/database"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/models"
 )
 
-type SQLiteDeviceStore struct {
+type SQLiteStore struct {
 	database *sql.DB
 }
 
-func (deviceStore *SQLiteDeviceStore) List() ([]models.Device, error) {
+func NewSQLiteStore(database *sql.DB) *SQLiteStore {
+	return &SQLiteStore{database: database}
+}
+
+func (deviceStore *SQLiteStore) List() ([]models.Device, error) {
 	rows, err := deviceStore.database.Query(`SELECT id, name, host, last_synced_at, paired_at, host_key, identity_changed FROM devices ORDER BY name`)
 	if err != nil {
 		return nil, merry.Wrap(err)
@@ -33,7 +38,7 @@ func (deviceStore *SQLiteDeviceStore) List() ([]models.Device, error) {
 	return devices, merry.Wrap(rows.Err())
 }
 
-func (deviceStore *SQLiteDeviceStore) Get(id string) (models.Device, error) {
+func (deviceStore *SQLiteStore) Get(id string) (models.Device, error) {
 	row := deviceStore.database.QueryRow(`SELECT id, name, host, last_synced_at, paired_at, host_key, identity_changed FROM devices WHERE id = ?`, id)
 	d, err := scanDevice(row)
 	if err == sql.ErrNoRows {
@@ -42,7 +47,7 @@ func (deviceStore *SQLiteDeviceStore) Get(id string) (models.Device, error) {
 	return d, err
 }
 
-func (deviceStore *SQLiteDeviceStore) Create(device models.Device) (models.Device, error) {
+func (deviceStore *SQLiteStore) Create(device models.Device) (models.Device, error) {
 	if device.ID == "" {
 		device.ID = uuid.NewString()
 	}
@@ -53,32 +58,32 @@ func (deviceStore *SQLiteDeviceStore) Create(device models.Device) (models.Devic
 	return device, nil
 }
 
-func (deviceStore *SQLiteDeviceStore) TouchSyncedAt(id string, when time.Time) error {
+func (deviceStore *SQLiteStore) TouchSyncedAt(id string, when time.Time) error {
 	_, err := deviceStore.database.Exec(`UPDATE devices SET last_synced_at = ? WHERE id = ?`, when, id)
 	return merry.Wrap(err)
 }
 
-func (deviceStore *SQLiteDeviceStore) SetPairedAt(id string, when *time.Time) error {
+func (deviceStore *SQLiteStore) SetPairedAt(id string, when *time.Time) error {
 	_, err := deviceStore.database.Exec(`UPDATE devices SET paired_at = ? WHERE id = ?`, when, id)
 	return merry.Wrap(err)
 }
 
-func (deviceStore *SQLiteDeviceStore) MarkPaired(id string, when time.Time, hostKey string) error {
+func (deviceStore *SQLiteStore) MarkPaired(id string, when time.Time, hostKey string) error {
 	_, err := deviceStore.database.Exec(`UPDATE devices SET paired_at = ?, host_key = ?, identity_changed = 0 WHERE id = ?`, when, hostKey, id)
 	return merry.Wrap(err)
 }
 
-func (deviceStore *SQLiteDeviceStore) SetHostKey(id, hostKey string) error {
+func (deviceStore *SQLiteStore) SetHostKey(id, hostKey string) error {
 	_, err := deviceStore.database.Exec(`UPDATE devices SET host_key = ? WHERE id = ?`, hostKey, id)
 	return merry.Wrap(err)
 }
 
-func (deviceStore *SQLiteDeviceStore) MarkIdentityChanged(id string) error {
+func (deviceStore *SQLiteStore) MarkIdentityChanged(id string) error {
 	_, err := deviceStore.database.Exec(`UPDATE devices SET paired_at = NULL, identity_changed = 1 WHERE id = ?`, id)
 	return merry.Wrap(err)
 }
 
-func (deviceStore *SQLiteDeviceStore) Rename(id, name string) (models.Device, error) {
+func (deviceStore *SQLiteStore) Rename(id, name string) (models.Device, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return models.Device{}, merry.Here(ErrDeviceNameRequired)
@@ -93,7 +98,7 @@ func (deviceStore *SQLiteDeviceStore) Rename(id, name string) (models.Device, er
 	return deviceStore.Get(id)
 }
 
-func (deviceStore *SQLiteDeviceStore) Delete(id string) error {
+func (deviceStore *SQLiteStore) Delete(id string) error {
 	result, err := deviceStore.database.Exec(`DELETE FROM devices WHERE id = ?`, id)
 	if err != nil {
 		return merry.Wrap(err).WithUserMessage("removing device")
@@ -104,7 +109,7 @@ func (deviceStore *SQLiteDeviceStore) Delete(id string) error {
 	return nil
 }
 
-func scanDevice(row rowScanner) (models.Device, error) {
+func scanDevice(row database.RowScanner) (models.Device, error) {
 	var d models.Device
 	err := row.Scan(&d.ID, &d.Name, &d.Host, &d.LastSyncedAt, &d.PairedAt, &d.HostKey, &d.IdentityChanged)
 	if err != nil {

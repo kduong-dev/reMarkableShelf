@@ -1,4 +1,4 @@
-package store_test
+package database_test
 
 import (
 	"database/sql"
@@ -8,8 +8,9 @@ import (
 	. "github.com/smartystreets/goconvey/convey"
 	_ "modernc.org/sqlite"
 
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/bookstore"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/database"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/models"
-	"github.com/kduong-dev/reMarkableShelf/backend/internal/store"
 )
 
 func TestMigrate(t *testing.T) {
@@ -28,23 +29,24 @@ func TestMigrate(t *testing.T) {
 		So(err, ShouldBeNil)
 		So(legacy.Close(), ShouldBeNil)
 		Convey("When the store opens it", func() {
-			opened, err := store.Open(path)
+			opened, err := database.Open(path)
 			So(err, ShouldBeNil)
 			Reset(func() { _ = opened.Close() })
+			books := bookstore.NewSQLiteStore(opened)
 			Convey("Then the page columns are added", func() {
 				pageCount := 544
-				_, err := opened.Books.Update("book-1", models.Book{PageCount: &pageCount})
+				_, err := books.Update("book-1", models.Book{PageCount: &pageCount})
 				So(err, ShouldBeNil)
 			})
 			Convey("Then the book is kept with its Google Books ID cleared", func() {
-				book, err := opened.Books.Get("book-1")
+				book, err := books.Get("book-1")
 				So(err, ShouldBeNil)
 				So(book.Title, ShouldEqual, "Dune")
 				So(book.OpenLibraryID, ShouldBeEmpty)
 			})
 			Convey("Then opening it again is a no-op", func() {
 				So(opened.Close(), ShouldBeNil)
-				reopened, err := store.Open(path)
+				reopened, err := database.Open(path)
 				So(err, ShouldBeNil)
 				So(reopened.Close(), ShouldBeNil)
 			})

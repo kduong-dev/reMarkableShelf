@@ -1,4 +1,4 @@
-package store
+package devicestore
 
 import (
 	"time"
@@ -6,9 +6,9 @@ import (
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/models"
 )
 
-// DeviceStore holds the tablets the server syncs, and whether each one is
+// Store holds the tablets the server syncs, and whether each one is
 // still paired.
-type DeviceStore interface {
+type Store interface {
 	List() ([]models.Device, error)
 	Get(id string) (models.Device, error)
 	Create(device models.Device) (models.Device, error)

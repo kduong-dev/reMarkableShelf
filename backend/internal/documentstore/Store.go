@@ -1,4 +1,4 @@
-package store
+package documentstore
 
 import (
 	"time"
@@ -6,9 +6,9 @@ import (
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/models"
 )
 
-// DocumentStore holds the documents synced from each tablet and the books
+// Store holds the documents synced from each tablet and the books
 // they're linked to.
-type DocumentStore interface {
+type Store interface {
 	// Upsert replaces the known document set for a device with the
 	// freshly-synced list, preserving any existing link to a book.
 	Upsert(deviceID string, documents []models.RemarkableDocument) error

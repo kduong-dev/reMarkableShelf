@@ -3,7 +3,6 @@ package database
 import (
 	"database/sql"
 
-	"github.com/ansel1/merry"
 	_ "modernc.org/sqlite"
 )
 
@@ -15,10 +14,10 @@ func Open(path string) (*sql.DB, error) {
 	// connection, which the DSN does for every connection the pool opens.
 	database, err := sql.Open("sqlite", path+"?_pragma=foreign_keys(1)")
 	if err != nil {
-		return nil, merry.Wrap(err)
+		return nil, err
 	}
 	if err := database.Ping(); err != nil {
-		return nil, merry.Wrap(err)
+		return nil, err
 	}
 	// xochitl syncs can upsert many rows at once; sqlite only allows one
 	// writer at a time, so keep a single connection to avoid SQLITE_BUSY.

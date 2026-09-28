@@ -19,7 +19,7 @@ func (api *API) CreateDevice(responseWriter http.ResponseWriter, request *http.R
 	var err error
 	defer func() {
 		if err != nil {
-			httpx.SendErrorResponse(responseWriter, err)
+			sendErrorResponse(responseWriter, err)
 		}
 	}()
 	body, err := httpx.DecodeJSONBody[registerDeviceRequest](request)

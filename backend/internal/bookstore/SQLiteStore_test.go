@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/ansel1/merry"
+	"errors"
 	. "github.com/smartystreets/goconvey/convey"
 
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/bookstore"
@@ -38,13 +38,13 @@ func TestBookProgress(t *testing.T) {
 		Convey("When bookmarking a page past the end", func() {
 			_, err := books.Update(book.ID, models.Book{CurrentPage: pages(545)})
 			Convey("Then it returns ErrCurrentPageOutOfRange", func() {
-				So(merry.Is(err, bookstore.ErrCurrentPageOutOfRange), ShouldBeTrue)
+				So(errors.Is(err, bookstore.ErrCurrentPageOutOfRange), ShouldBeTrue)
 			})
 		})
 		Convey("When bookmarking a negative page", func() {
 			_, err := books.Update(book.ID, models.Book{CurrentPage: pages(-1)})
 			Convey("Then it returns ErrCurrentPageOutOfRange", func() {
-				So(merry.Is(err, bookstore.ErrCurrentPageOutOfRange), ShouldBeTrue)
+				So(errors.Is(err, bookstore.ErrCurrentPageOutOfRange), ShouldBeTrue)
 			})
 		})
 		Convey("When changing only the page count of a bookmarked book", func() {
@@ -60,7 +60,7 @@ func TestBookProgress(t *testing.T) {
 		Convey("When setting a page and a page count it's past the end of", func() {
 			_, err := books.Update(book.ID, models.Book{CurrentPage: pages(300), PageCount: pages(200)})
 			Convey("Then it returns ErrCurrentPageOutOfRange", func() {
-				So(merry.Is(err, bookstore.ErrCurrentPageOutOfRange), ShouldBeTrue)
+				So(errors.Is(err, bookstore.ErrCurrentPageOutOfRange), ShouldBeTrue)
 			})
 		})
 		Convey("When matching the book to an Open Library edition", func() {
@@ -77,7 +77,7 @@ func TestBookProgress(t *testing.T) {
 		Convey("When setting a page count of zero", func() {
 			_, err := books.Update(book.ID, models.Book{PageCount: pages(0)})
 			Convey("Then it returns ErrInvalidPageCount", func() {
-				So(merry.Is(err, bookstore.ErrInvalidPageCount), ShouldBeTrue)
+				So(errors.Is(err, bookstore.ErrInvalidPageCount), ShouldBeTrue)
 			})
 		})
 	})

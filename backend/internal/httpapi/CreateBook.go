@@ -14,7 +14,7 @@ func (api *API) CreateBook(responseWriter http.ResponseWriter, request *http.Req
 	var err error
 	defer func() {
 		if err != nil {
-			httpx.SendErrorResponse(responseWriter, err)
+			sendErrorResponse(responseWriter, err)
 		}
 	}()
 	body, err := httpx.DecodeJSONBody[models.Book](request)

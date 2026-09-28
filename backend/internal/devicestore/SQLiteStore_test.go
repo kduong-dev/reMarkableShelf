@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/ansel1/merry"
+	"errors"
 	. "github.com/smartystreets/goconvey/convey"
 
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/database"
@@ -33,13 +33,13 @@ func TestRenameDevice(t *testing.T) {
 		Convey("When renaming it to blank", func() {
 			_, err := devices.Rename(device.ID, "   ")
 			Convey("Then it returns ErrDeviceNameRequired", func() {
-				So(merry.Is(err, devicestore.ErrDeviceNameRequired), ShouldBeTrue)
+				So(errors.Is(err, devicestore.ErrDeviceNameRequired), ShouldBeTrue)
 			})
 		})
 		Convey("When renaming a device that doesn't exist", func() {
 			_, err := devices.Rename("missing", "Paper Pro")
-			Convey("Then it responds not found", func() {
-				So(merry.HTTPCode(err), ShouldEqual, 404)
+			Convey("Then it returns ErrDeviceNotFound", func() {
+				So(errors.Is(err, devicestore.ErrDeviceNotFound), ShouldBeTrue)
 			})
 		})
 	})

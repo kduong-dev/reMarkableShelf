@@ -2,10 +2,9 @@ package bookstore
 
 import (
 	"database/sql"
-	"net/http"
+	"fmt"
 	"time"
 
-	"github.com/ansel1/merry"
 	"github.com/google/uuid"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/database"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/models"
@@ -31,7 +30,7 @@ func NewSQLiteStore(database *sql.DB) *SQLiteStore {
 func (bookStore *SQLiteStore) List() ([]models.Book, error) {
 	rows, err := bookStore.database.Query(selectBooks + ` ORDER BY updated_at DESC`)
 	if err != nil {
-		return nil, merry.Wrap(err)
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -43,14 +42,14 @@ func (bookStore *SQLiteStore) List() ([]models.Book, error) {
 		}
 		books = append(books, book)
 	}
-	return books, merry.Wrap(rows.Err())
+	return books, rows.Err()
 }
 
 func (bookStore *SQLiteStore) Get(id string) (models.Book, error) {
 	row := bookStore.database.QueryRow(selectBooks+` WHERE id = ?`, id)
 	book, err := scanBook(row)
 	if err == sql.ErrNoRows {
-		return models.Book{}, merry.New("book not found").WithHTTPCode(http.StatusNotFound).WithUserMessagef("no book with id %q", id)
+		return models.Book{}, fmt.Errorf("book %q: %w", id, ErrBookNotFound)
 	}
 	return book, err
 }
@@ -81,7 +80,7 @@ func (bookStore *SQLiteStore) Create(book models.Book) (models.Book, error) {
 		book.ID, book.Title, book.Author, book.ISBN, book.CoverURL, book.Status, book.Rating, book.Source, book.OpenLibraryID, book.PageCount, book.CurrentPage, book.ProgressUpdatedAt, book.ProgressSource, book.CreatedAt, book.UpdatedAt,
 	)
 	if err != nil {
-		return models.Book{}, merry.Wrap(err).WithUserMessage("creating book")
+		return models.Book{}, fmt.Errorf("creating book: %w", err)
 	}
 	return book, nil
 }
@@ -135,7 +134,7 @@ func (bookStore *SQLiteStore) Update(id string, patch models.Book) (models.Book,
 		existing.Title, existing.Author, existing.ISBN, existing.CoverURL, existing.OpenLibraryID, existing.Status, existing.Rating, existing.PageCount, existing.CurrentPage, existing.ProgressUpdatedAt, existing.ProgressSource, existing.UpdatedAt, existing.ID,
 	)
 	if err != nil {
-		return models.Book{}, merry.Wrap(err).WithUserMessage("updating book")
+		return models.Book{}, fmt.Errorf("updating book: %w", err)
 	}
 	return existing, nil
 }
@@ -156,7 +155,7 @@ func (bookStore *SQLiteStore) SetTabletProgress(input SetTabletProgressInput) (m
 		book.Status, book.PageCount, book.CurrentPage, book.ProgressUpdatedAt, book.ProgressSource, book.UpdatedAt, book.ID,
 	)
 	if err != nil {
-		return models.Book{}, merry.Wrap(err).WithUserMessage("updating book progress")
+		return models.Book{}, fmt.Errorf("updating book progress: %w", err)
 	}
 	return book, nil
 }
@@ -164,10 +163,10 @@ func (bookStore *SQLiteStore) SetTabletProgress(input SetTabletProgressInput) (m
 func (bookStore *SQLiteStore) Delete(id string) error {
 	res, err := bookStore.database.Exec(`DELETE FROM books WHERE id = ?`, id)
 	if err != nil {
-		return merry.Wrap(err).WithUserMessage("deleting book")
+		return fmt.Errorf("deleting book: %w", err)
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
-		return merry.New("book not found").WithHTTPCode(http.StatusNotFound).WithUserMessagef("no book with id %q", id)
+		return fmt.Errorf("book %q: %w", id, ErrBookNotFound)
 	}
 	return nil
 }
@@ -176,13 +175,13 @@ func (bookStore *SQLiteStore) Delete(id string) error {
 // a current page past the end of a book whose length is known.
 func validateProgress(book models.Book) error {
 	if book.PageCount != nil && *book.PageCount < 1 {
-		return merry.Here(ErrInvalidPageCount)
+		return ErrInvalidPageCount
 	}
 	if book.CurrentPage != nil && *book.CurrentPage < 0 {
-		return merry.Here(ErrCurrentPageOutOfRange)
+		return ErrCurrentPageOutOfRange
 	}
 	if book.PageCount != nil && book.CurrentPage != nil && *book.CurrentPage > *book.PageCount {
-		return merry.Here(ErrCurrentPageOutOfRange).WithUserMessagef("page %d is past the end of a %d-page book", *book.CurrentPage, *book.PageCount)
+		return fmt.Errorf("%w: page %d is past the end of a %d-page book", ErrCurrentPageOutOfRange, *book.CurrentPage, *book.PageCount)
 	}
 	return nil
 }
@@ -196,7 +195,7 @@ func scanBook(row database.RowScanner) (models.Book, error) {
 		if err == sql.ErrNoRows {
 			return models.Book{}, err
 		}
-		return models.Book{}, merry.Wrap(err)
+		return models.Book{}, err
 	}
 	return b, nil
 }

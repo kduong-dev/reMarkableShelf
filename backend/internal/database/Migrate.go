@@ -2,8 +2,7 @@ package database
 
 import (
 	"database/sql"
-
-	"github.com/ansel1/merry"
+	"fmt"
 )
 
 const schema = `
@@ -86,7 +85,7 @@ func migrate(database *sql.DB) error {
 	}
 	_, err := database.Exec(schema)
 	if err != nil {
-		return merry.Wrap(err).WithUserMessage("running database migrations")
+		return fmt.Errorf("running database migrations: %w", err)
 	}
 	for _, column := range addedColumns {
 		if err := addColumnIfMissing(database, column.table, column.name, column.definition); err != nil {
@@ -105,7 +104,7 @@ func removeOrphans(database *sql.DB) error {
 		 WHERE linked_book_id IS NOT NULL AND linked_book_id NOT IN (SELECT id FROM books);
 		DELETE FROM remarkable_documents WHERE device_id NOT IN (SELECT id FROM devices);`)
 	if err != nil {
-		return merry.Wrap(err).WithUserMessage("removing orphaned documents")
+		return fmt.Errorf("removing orphaned documents: %w", err)
 	}
 	return nil
 }
@@ -114,7 +113,7 @@ func columnExists(database *sql.DB, table, column string) (bool, error) {
 	var count int
 	err := database.QueryRow(`SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?`, table, column).Scan(&count)
 	if err != nil {
-		return false, merry.Wrap(err).WithUserMessagef("inspecting %s table", table)
+		return false, fmt.Errorf("inspecting %s table: %w", table, err)
 	}
 	return count > 0, nil
 }
@@ -128,7 +127,7 @@ func addColumnIfMissing(database *sql.DB, table, column, definition string) erro
 	}
 	_, err = database.Exec(`ALTER TABLE ` + table + ` ADD COLUMN ` + column + ` ` + definition)
 	if err != nil {
-		return merry.Wrap(err).WithUserMessagef("adding %s.%s column", table, column)
+		return fmt.Errorf("adding %s.%s column: %w", table, column, err)
 	}
 	return nil
 }
@@ -143,7 +142,7 @@ func renameGoogleBooksIDColumn(database *sql.DB) error {
 	}
 	_, err = database.Exec(`ALTER TABLE books RENAME COLUMN google_books_id TO open_library_id; UPDATE books SET open_library_id = ''`)
 	if err != nil {
-		return merry.Wrap(err).WithUserMessage("renaming google_books_id column")
+		return fmt.Errorf("renaming google_books_id column: %w", err)
 	}
 	return nil
 }

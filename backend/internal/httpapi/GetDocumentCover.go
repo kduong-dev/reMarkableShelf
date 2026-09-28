@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	"github.com/kduong-dev/goutil/httpx"
 )
 
 // GetDocumentCover serves a tablet document's synced cover. Its URL stays the
@@ -16,7 +15,7 @@ func (api *API) GetDocumentCover(responseWriter http.ResponseWriter, request *ht
 	var err error
 	defer func() {
 		if err != nil {
-			httpx.SendErrorResponse(responseWriter, err)
+			sendErrorResponse(responseWriter, err)
 		}
 	}()
 	vars := mux.Vars(request)

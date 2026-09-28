@@ -1,11 +1,8 @@
 package devicestore
 
-import (
-	"net/http"
-
-	"github.com/ansel1/merry"
-)
+import "errors"
 
 var (
-	ErrDeviceNameRequired = merry.New("device name is required").WithHTTPCode(http.StatusBadRequest).WithUserMessage("enter a name for the device")
+	ErrDeviceNotFound     = errors.New("device not found")
+	ErrDeviceNameRequired = errors.New("device name is required")
 )

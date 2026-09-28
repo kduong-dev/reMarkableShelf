@@ -2,10 +2,9 @@ package documentstore
 
 import (
 	"database/sql"
-	"net/http"
+	"fmt"
 	"time"
 
-	"github.com/ansel1/merry"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/models"
 )
 
@@ -20,7 +19,7 @@ func NewSQLiteStore(database *sql.DB) *SQLiteStore {
 func (documentStore *SQLiteStore) Upsert(deviceID string, docs []models.RemarkableDocument) error {
 	tx, err := documentStore.database.Begin()
 	if err != nil {
-		return merry.Wrap(err)
+		return err
 	}
 	defer tx.Rollback()
 
@@ -40,10 +39,10 @@ func (documentStore *SQLiteStore) Upsert(deviceID string, docs []models.Remarkab
 			doc.UUID, deviceID, doc.Title, doc.FileType, doc.LastModified, doc.CurrentPage, doc.PageCount, doc.PositionUpdatedAt, doc.BookTitle, doc.BookAuthor,
 		)
 		if err != nil {
-			return merry.Wrap(err).WithUserMessagef("upserting document %q", doc.UUID)
+			return fmt.Errorf("upserting document %q: %w", doc.UUID, err)
 		}
 	}
-	return merry.Wrap(tx.Commit())
+	return tx.Commit()
 }
 
 func (documentStore *SQLiteStore) ListByDevice(deviceID string) ([]models.RemarkableDocument, error) {
@@ -61,7 +60,7 @@ func (documentStore *SQLiteStore) list(where, arg string) ([]models.RemarkableDo
 		arg,
 	)
 	if err != nil {
-		return nil, merry.Wrap(err)
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -69,11 +68,11 @@ func (documentStore *SQLiteStore) list(where, arg string) ([]models.RemarkableDo
 	for rows.Next() {
 		var d models.RemarkableDocument
 		if err := rows.Scan(&d.UUID, &d.DeviceID, &d.Title, &d.FileType, &d.LastModified, &d.LinkedBookID, &d.CurrentPage, &d.PageCount, &d.PositionUpdatedAt, &d.BookTitle, &d.BookAuthor, &d.AutoLinkDismissed, &d.HasCover, &d.CoverCheckedAt); err != nil {
-			return nil, merry.Wrap(err)
+			return nil, err
 		}
 		docs = append(docs, d)
 	}
-	return docs, merry.Wrap(rows.Err())
+	return docs, rows.Err()
 }
 
 func (documentStore *SQLiteStore) LinkToBook(deviceID, docUUID, bookID string) error {
@@ -81,7 +80,7 @@ func (documentStore *SQLiteStore) LinkToBook(deviceID, docUUID, bookID string) e
 		`UPDATE remarkable_documents SET linked_book_id = ?, auto_link_dismissed = 0 WHERE device_id = ? AND uuid = ?`,
 		bookID, deviceID, docUUID,
 	)
-	return merry.Wrap(err)
+	return err
 }
 
 func (documentStore *SQLiteStore) Unlink(deviceID, docUUID string) error {
@@ -90,10 +89,10 @@ func (documentStore *SQLiteStore) Unlink(deviceID, docUUID string) error {
 		deviceID, docUUID,
 	)
 	if err != nil {
-		return merry.Wrap(err).WithUserMessage("unlinking document")
+		return fmt.Errorf("unlinking document: %w", err)
 	}
 	if count, _ := result.RowsAffected(); count == 0 {
-		return merry.New("document not found").WithHTTPCode(http.StatusNotFound).WithUserMessagef("no document %q on that device", docUUID)
+		return fmt.Errorf("document %q on device %q: %w", docUUID, deviceID, ErrDocumentNotFound)
 	}
 	return nil
 }
@@ -103,7 +102,7 @@ func (documentStore *SQLiteStore) SetCover(deviceID, docUUID string, image []byt
 		`UPDATE remarkable_documents SET cover_image = COALESCE(?, cover_image), cover_checked_at = ? WHERE device_id = ? AND uuid = ?`,
 		image, checkedAt, deviceID, docUUID,
 	)
-	return merry.Wrap(err)
+	return err
 }
 
 func (documentStore *SQLiteStore) GetCover(deviceID, docUUID string) ([]byte, error) {
@@ -113,7 +112,7 @@ func (documentStore *SQLiteStore) GetCover(deviceID, docUUID string) ([]byte, er
 		deviceID, docUUID,
 	).Scan(&image)
 	if err == sql.ErrNoRows {
-		return nil, merry.New("cover not found").WithHTTPCode(http.StatusNotFound).WithUserMessage("that document has no synced cover")
+		return nil, fmt.Errorf("cover of document %q on device %q: %w", docUUID, deviceID, ErrCoverNotFound)
 	}
-	return image, merry.Wrap(err)
+	return image, err
 }

@@ -11,7 +11,7 @@ func (api *API) SyncDevice(responseWriter http.ResponseWriter, request *http.Req
 	var err error
 	defer func() {
 		if err != nil {
-			httpx.SendErrorResponse(responseWriter, err)
+			sendErrorResponse(responseWriter, err)
 		}
 	}()
 	vars := mux.Vars(request)

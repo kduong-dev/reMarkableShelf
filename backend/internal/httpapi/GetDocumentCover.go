@@ -19,7 +19,7 @@ func (api *API) GetDocumentCover(responseWriter http.ResponseWriter, request *ht
 		}
 	}()
 	vars := mux.Vars(request)
-	image, err := api.store.Documents.GetCover(vars["id"], vars["uuid"])
+	image, err := api.documentStore.GetCover(vars["id"], vars["uuid"])
 	if err != nil {
 		return
 	}

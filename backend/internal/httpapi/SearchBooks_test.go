@@ -3,25 +3,24 @@ package httpapi_test
 import (
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"testing"
 
 	. "github.com/smartystreets/goconvey/convey"
 
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/httpapi"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/openlibrary"
-	"github.com/kduong-dev/reMarkableShelf/backend/internal/store"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/storetest"
 )
 
 func TestSearchBooks(t *testing.T) {
 	Convey("Given the API with a fake Open Library", t, func() {
-		opened, err := store.Open(filepath.Join(t.TempDir(), "books.db"))
-		So(err, ShouldBeNil)
-		Reset(func() { _ = opened.Close() })
+		bookStore, deviceStore, documentStore := storetest.Open(t)
 		var searchInput openlibrary.SearchInput
 		handler := httpapi.NewHandler(httpapi.NewHandlerInput{
-			Store:       opened,
-			OpenLibrary: fakeOpenLibrary{searchInput: &searchInput},
+			BookStore:     bookStore,
+			DeviceStore:   deviceStore,
+			DocumentStore: documentStore,
+			OpenLibrary:   fakeOpenLibrary{searchInput: &searchInput},
 		})
 		search := func(query string) *httptest.ResponseRecorder {
 			recorder := httptest.NewRecorder()

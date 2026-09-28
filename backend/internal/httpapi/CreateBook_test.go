@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -13,7 +12,7 @@ import (
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/httpapi"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/models"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/openlibrary"
-	"github.com/kduong-dev/reMarkableShelf/backend/internal/store"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/storetest"
 )
 
 type fakeOpenLibrary struct {
@@ -34,10 +33,8 @@ func (fake fakeOpenLibrary) EditionPageCount(isbn string) (int, error) {
 }
 
 func createBook(t *testing.T, openLibrary openlibrary.API, body string) models.Book {
-	opened, err := store.Open(filepath.Join(t.TempDir(), "books.db"))
-	So(err, ShouldBeNil)
-	Reset(func() { _ = opened.Close() })
-	handler := httpapi.NewHandler(httpapi.NewHandlerInput{Store: opened, OpenLibrary: openLibrary})
+	bookStore, deviceStore, documentStore := storetest.Open(t)
+	handler := httpapi.NewHandler(httpapi.NewHandlerInput{BookStore: bookStore, DeviceStore: deviceStore, DocumentStore: documentStore, OpenLibrary: openLibrary})
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/api/books", strings.NewReader(body)))
 	So(recorder.Code, ShouldEqual, http.StatusCreated)

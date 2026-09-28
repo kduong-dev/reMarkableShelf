@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -17,24 +16,24 @@ import (
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/httpapi"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/models"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/openlibrary"
-	"github.com/kduong-dev/reMarkableShelf/backend/internal/store"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/storetest"
 )
 
 func TestErrorResponses(t *testing.T) {
 	Convey("Given the API holding a 544-page book", t, func() {
-		opened, err := store.Open(filepath.Join(t.TempDir(), "books.db"))
-		So(err, ShouldBeNil)
-		Reset(func() { _ = opened.Close() })
+		bookStore, deviceStore, documentStore := storetest.Open(t)
 		pageCount := 544
-		book, err := opened.Books.Create(models.Book{Title: "Dune", PageCount: &pageCount})
+		book, err := bookStore.Create(models.Book{Title: "Dune", PageCount: &pageCount})
 		So(err, ShouldBeNil)
-		device, err := opened.Devices.Create(models.Device{Name: "Paper Pro", Host: "10.0.0.5"})
+		device, err := deviceStore.Create(models.Device{Name: "Paper Pro", Host: "10.0.0.5"})
 		So(err, ShouldBeNil)
 		// Every request below fails before reaching a tablet.
 		handler := httpapi.NewHandler(httpapi.NewHandlerInput{
-			Store:       opened,
-			OpenLibrary: fakeOpenLibrary{},
-			Syncer:      devicesync.NewSyncer(opened, nil),
+			BookStore:     bookStore,
+			DeviceStore:   deviceStore,
+			DocumentStore: documentStore,
+			OpenLibrary:   fakeOpenLibrary{},
+			Syncer:        devicesync.NewSyncer(devicesync.NewSyncerInput{BookStore: bookStore, DeviceStore: deviceStore, DocumentStore: documentStore}),
 		})
 		send := func(method, path, body string) (int, string) {
 			recorder := httptest.NewRecorder()
@@ -87,11 +86,9 @@ func TestErrorResponses(t *testing.T) {
 		})
 	})
 	Convey("Given Open Library fails a search", t, func() {
-		opened, err := store.Open(filepath.Join(t.TempDir(), "books.db"))
-		So(err, ShouldBeNil)
-		Reset(func() { _ = opened.Close() })
+		bookStore, deviceStore, documentStore := storetest.Open(t)
 		search := func(openLibraryErr error) (int, string) {
-			handler := httpapi.NewHandler(httpapi.NewHandlerInput{Store: opened, OpenLibrary: fakeOpenLibrary{err: openLibraryErr}})
+			handler := httpapi.NewHandler(httpapi.NewHandlerInput{BookStore: bookStore, DeviceStore: deviceStore, DocumentStore: documentStore, OpenLibrary: fakeOpenLibrary{err: openLibraryErr}})
 			recorder := httptest.NewRecorder()
 			handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/search/books?q=dune", nil))
 			var message httpx.ResponseMessage

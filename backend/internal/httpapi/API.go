@@ -1,13 +1,17 @@
 package httpapi
 
 import (
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/bookstore"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/devicestore"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/devicesync"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/documentstore"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/openlibrary"
-	"github.com/kduong-dev/reMarkableShelf/backend/internal/store"
 )
 
 type API struct {
-	store       *store.Store
-	openLibrary openlibrary.API
-	syncer      *devicesync.Syncer
+	bookStore     bookstore.Store
+	deviceStore   devicestore.Store
+	documentStore documentstore.Store
+	openLibrary   openlibrary.API
+	syncer        *devicesync.Syncer
 }

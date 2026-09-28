@@ -14,7 +14,7 @@ func (api *API) UnlinkDocument(responseWriter http.ResponseWriter, request *http
 		}
 	}()
 	vars := mux.Vars(request)
-	err = api.store.Documents.Unlink(vars["id"], vars["uuid"])
+	err = api.documentStore.Unlink(vars["id"], vars["uuid"])
 	if err != nil {
 		return
 	}

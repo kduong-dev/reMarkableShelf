@@ -8,22 +8,38 @@ import (
 	"time"
 
 	"github.com/kduong-dev/goutil/logx"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/bookstore"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/devicestore"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/documentstore"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/models"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/remarkable"
-	"github.com/kduong-dev/reMarkableShelf/backend/internal/store"
 )
 
 // Syncer copies a tablet's documents and reading positions into the store.
 // Syncs run one at a time, so a manual sync and a background one can't
 // interleave their writes.
 type Syncer struct {
-	store      *store.Store
-	remarkable remarkable.API
-	mutex      sync.Mutex
+	bookStore     bookstore.Store
+	deviceStore   devicestore.Store
+	documentStore documentstore.Store
+	remarkable    remarkable.API
+	mutex         sync.Mutex
 }
 
-func NewSyncer(store *store.Store, remarkable remarkable.API) *Syncer {
-	return &Syncer{store: store, remarkable: remarkable}
+type NewSyncerInput struct {
+	BookStore     bookstore.Store
+	DeviceStore   devicestore.Store
+	DocumentStore documentstore.Store
+	Remarkable    remarkable.API
+}
+
+func NewSyncer(input NewSyncerInput) *Syncer {
+	return &Syncer{
+		bookStore:     input.BookStore,
+		deviceStore:   input.DeviceStore,
+		documentStore: input.DocumentStore,
+		remarkable:    input.Remarkable,
+	}
 }
 
 // SyncDevice reads every document on the device, upserts them, auto-links
@@ -33,18 +49,18 @@ func NewSyncer(store *store.Store, remarkable remarkable.API) *Syncer {
 func (syncer *Syncer) SyncDevice(deviceID string) ([]models.RemarkableDocument, error) {
 	syncer.mutex.Lock()
 	defer syncer.mutex.Unlock()
-	device, err := syncer.store.Devices.Get(deviceID)
+	device, err := syncer.deviceStore.Get(deviceID)
 	if err != nil {
 		return nil, err
 	}
 	listing, err := syncer.remarkable.ListDocuments(tabletOf(device))
 	switch {
 	case errors.Is(err, remarkable.ErrHostKeyChanged):
-		if markErr := syncer.store.Devices.MarkIdentityChanged(device.ID); markErr != nil {
+		if markErr := syncer.deviceStore.MarkIdentityChanged(device.ID); markErr != nil {
 			return nil, markErr
 		}
 	case errors.Is(err, remarkable.ErrNotPaired) && device.PairedAt != nil:
-		if unpairErr := syncer.store.Devices.SetPairedAt(device.ID, nil); unpairErr != nil {
+		if unpairErr := syncer.deviceStore.SetPairedAt(device.ID, nil); unpairErr != nil {
 			return nil, unpairErr
 		}
 	}
@@ -52,16 +68,16 @@ func (syncer *Syncer) SyncDevice(deviceID string) ([]models.RemarkableDocument, 
 		return nil, err
 	}
 	if device.HostKey == "" {
-		if err := syncer.store.Devices.SetHostKey(device.ID, listing.HostKey); err != nil {
+		if err := syncer.deviceStore.SetHostKey(device.ID, listing.HostKey); err != nil {
 			return nil, err
 		}
 		device.HostKey = listing.HostKey
 	}
 	documents := listing.Documents
-	if err := syncer.store.Documents.Upsert(device.ID, documents); err != nil {
+	if err := syncer.documentStore.Upsert(device.ID, documents); err != nil {
 		return nil, err
 	}
-	if err := syncer.store.Devices.TouchSyncedAt(device.ID, time.Now().UTC()); err != nil {
+	if err := syncer.deviceStore.TouchSyncedAt(device.ID, time.Now().UTC()); err != nil {
 		return nil, err
 	}
 	if err := syncer.autoLinkDocuments(device.ID); err != nil {
@@ -70,7 +86,7 @@ func (syncer *Syncer) SyncDevice(deviceID string) ([]models.RemarkableDocument, 
 	if err := syncer.fetchCovers(device, documents); err != nil {
 		return nil, err
 	}
-	syncedDocuments, err := syncer.store.Documents.ListByDevice(device.ID)
+	syncedDocuments, err := syncer.documentStore.ListByDevice(device.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +113,7 @@ func (syncer *Syncer) Run(ctx context.Context, interval time.Duration) {
 }
 
 func (syncer *Syncer) syncAllDevices() {
-	devices, err := syncer.store.Devices.List()
+	devices, err := syncer.deviceStore.List()
 	if err != nil {
 		logx.Warnf("background sync: listing devices: %v", err)
 		return
@@ -132,7 +148,7 @@ func (syncer *Syncer) RegisterDevice(input RegisterDeviceInput) (models.Device, 
 	if input.Password == "" {
 		return models.Device{}, ErrPasswordRequired
 	}
-	devices, err := syncer.store.Devices.List()
+	devices, err := syncer.deviceStore.List()
 	if err != nil {
 		return models.Device{}, err
 	}
@@ -146,7 +162,7 @@ func (syncer *Syncer) RegisterDevice(input RegisterDeviceInput) (models.Device, 
 		return models.Device{}, err
 	}
 	pairedAt := time.Now().UTC()
-	return syncer.store.Devices.Create(models.Device{Name: input.Name, Host: input.Host, PairedAt: &pairedAt, HostKey: hostKey})
+	return syncer.deviceStore.Create(models.Device{Name: input.Name, Host: input.Host, PairedAt: &pairedAt, HostKey: hostKey})
 }
 
 // PairDeviceInput pairs a registered device again. The tablet must present
@@ -163,7 +179,7 @@ func (syncer *Syncer) PairDevice(input PairDeviceInput) (models.Device, error) {
 	if input.Password == "" {
 		return models.Device{}, ErrPasswordRequired
 	}
-	device, err := syncer.store.Devices.Get(input.DeviceID)
+	device, err := syncer.deviceStore.Get(input.DeviceID)
 	if err != nil {
 		return models.Device{}, err
 	}
@@ -173,7 +189,7 @@ func (syncer *Syncer) PairDevice(input PairDeviceInput) (models.Device, error) {
 	}
 	hostKey, err := syncer.remarkable.Pair(tablet, input.Password)
 	if errors.Is(err, remarkable.ErrHostKeyChanged) {
-		if markErr := syncer.store.Devices.MarkIdentityChanged(device.ID); markErr != nil {
+		if markErr := syncer.deviceStore.MarkIdentityChanged(device.ID); markErr != nil {
 			return models.Device{}, markErr
 		}
 	}
@@ -181,10 +197,10 @@ func (syncer *Syncer) PairDevice(input PairDeviceInput) (models.Device, error) {
 		return models.Device{}, err
 	}
 	pairedAt := time.Now().UTC()
-	if err := syncer.store.Devices.MarkPaired(device.ID, pairedAt, hostKey); err != nil {
+	if err := syncer.deviceStore.MarkPaired(device.ID, pairedAt, hostKey); err != nil {
 		return models.Device{}, err
 	}
-	return syncer.store.Devices.Get(device.ID)
+	return syncer.deviceStore.Get(device.ID)
 }
 
 func tabletOf(device models.Device) remarkable.Tablet {
@@ -197,10 +213,10 @@ func tabletOf(device models.Device) remarkable.Tablet {
 func (syncer *Syncer) LinkDocument(deviceID, documentUUID, bookID string) error {
 	syncer.mutex.Lock()
 	defer syncer.mutex.Unlock()
-	if err := syncer.store.Documents.LinkToBook(deviceID, documentUUID, bookID); err != nil {
+	if err := syncer.documentStore.LinkToBook(deviceID, documentUUID, bookID); err != nil {
 		return err
 	}
-	documents, err := syncer.store.Documents.ListByDevice(deviceID)
+	documents, err := syncer.documentStore.ListByDevice(deviceID)
 	if err != nil {
 		return err
 	}
@@ -217,7 +233,7 @@ func (syncer *Syncer) LinkDocument(deviceID, documentUUID, bookID string) error 
 // renders thumbnails lazily, so a missing one is retried on later syncs.
 // Covers are a nicety, so failing to fetch them is logged, not returned.
 func (syncer *Syncer) fetchCovers(device models.Device, listed []models.RemarkableDocument) error {
-	stored, err := syncer.store.Documents.ListByDevice(device.ID)
+	stored, err := syncer.documentStore.ListByDevice(device.ID)
 	if err != nil {
 		return err
 	}
@@ -244,7 +260,7 @@ func (syncer *Syncer) fetchCovers(device models.Device, listed []models.Remarkab
 		return nil
 	}
 	for _, request := range requests {
-		if err := syncer.store.Documents.SetCover(device.ID, request.DocumentUUID, images[request.DocumentUUID], modifiedAt[request.DocumentUUID]); err != nil {
+		if err := syncer.documentStore.SetCover(device.ID, request.DocumentUUID, images[request.DocumentUUID], modifiedAt[request.DocumentUUID]); err != nil {
 			return err
 		}
 	}
@@ -252,11 +268,11 @@ func (syncer *Syncer) fetchCovers(device models.Device, listed []models.Remarkab
 }
 
 func (syncer *Syncer) autoLinkDocuments(deviceID string) error {
-	documents, err := syncer.store.Documents.ListByDevice(deviceID)
+	documents, err := syncer.documentStore.ListByDevice(deviceID)
 	if err != nil {
 		return err
 	}
-	books, err := syncer.store.Books.List()
+	books, err := syncer.bookStore.List()
 	if err != nil {
 		return err
 	}
@@ -272,7 +288,7 @@ func (syncer *Syncer) autoLinkDocuments(deviceID string) error {
 		if !found {
 			continue
 		}
-		if err := syncer.store.Documents.LinkToBook(deviceID, document.UUID, book.ID); err != nil {
+		if err := syncer.documentStore.LinkToBook(deviceID, document.UUID, book.ID); err != nil {
 			return err
 		}
 	}
@@ -284,12 +300,12 @@ func (syncer *Syncer) applyTabletProgress(documents []models.RemarkableDocument)
 		if document.LinkedBookID == nil {
 			continue
 		}
-		book, err := syncer.store.Books.Get(*document.LinkedBookID)
+		book, err := syncer.bookStore.Get(*document.LinkedBookID)
 		if err != nil {
 			return err
 		}
 		if input, ok := tabletProgress(book, document); ok {
-			if _, err := syncer.store.Books.SetTabletProgress(input); err != nil {
+			if _, err := syncer.bookStore.SetTabletProgress(input); err != nil {
 				return err
 			}
 			continue
@@ -297,7 +313,7 @@ func (syncer *Syncer) applyTabletProgress(documents []models.RemarkableDocument)
 		// With no newer position to take, still align the book to the
 		// tablet's page count; the store keeps the bookmark's place.
 		if document.PageCount != nil && (book.PageCount == nil || *book.PageCount != *document.PageCount) {
-			if _, err := syncer.store.Books.Update(book.ID, models.Book{PageCount: document.PageCount}); err != nil {
+			if _, err := syncer.bookStore.Update(book.ID, models.Book{PageCount: document.PageCount}); err != nil {
 				return err
 			}
 		}
@@ -311,7 +327,7 @@ func (syncer *Syncer) applyTabletProgress(documents []models.RemarkableDocument)
 func (syncer *Syncer) AlignBook(bookID string) error {
 	syncer.mutex.Lock()
 	defer syncer.mutex.Unlock()
-	documents, err := syncer.store.Documents.ListByBook(bookID)
+	documents, err := syncer.documentStore.ListByBook(bookID)
 	if err != nil {
 		return err
 	}

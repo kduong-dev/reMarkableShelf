@@ -76,3 +76,25 @@ export interface BookSearch {
   publishedFrom?: number
   publishedTo?: number
 }
+
+export type BookFileFormat = 'epub' | 'pdf'
+
+// Delivery is a book file copied to a tablet; loadedAt is unset until the
+// tablet's reading app restarts and shows it.
+export interface Delivery {
+  deviceId: string
+  documentUuid: string
+  copiedAt: string
+  loadedAt?: string
+}
+
+// BookFile is an ebook kept on the server, which sync copies to every paired
+// tablet.
+export interface BookFile {
+  bookId: string
+  format: BookFileFormat
+  size: number
+  source: 'open_library' | 'upload'
+  savedAt: string
+  deliveries: Delivery[]
+}

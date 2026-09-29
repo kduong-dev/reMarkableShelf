@@ -15,7 +15,9 @@ func (api *API) SyncDevice(responseWriter http.ResponseWriter, request *http.Req
 		}
 	}()
 	vars := mux.Vars(request)
-	documents, err := api.syncer.SyncDevice(vars["id"])
+	// A sync the user asks for may restart the tablet's reading app to show
+	// books copied to it.
+	documents, err := api.syncer.SyncDeviceNow(vars["id"])
 	if err != nil {
 		return
 	}

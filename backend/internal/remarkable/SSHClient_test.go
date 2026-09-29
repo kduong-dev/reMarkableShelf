@@ -99,7 +99,7 @@ func (tablet *fakeTablet) serve(connection net.Conn, config *ssh.ServerConfig) {
 				command := exec.Command("sh", "-c", payload.Command)
 				command.Env = []string{"HOME=" + tablet.home, "PATH=" + os.Getenv("PATH")}
 				command.Dir = tablet.home
-				command.Stdout, command.Stderr = channel, channel.Stderr()
+				command.Stdin, command.Stdout, command.Stderr = channel, channel, channel.Stderr()
 				status := uint32(0)
 				if err := command.Run(); err != nil {
 					status = 1

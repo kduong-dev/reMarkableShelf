@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"mime"
@@ -11,11 +12,12 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/kduong-dev/goutil/logx"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/internetarchive"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/openlibrary"
 )
 
-var contentTypes = map[internetarchive.Format]string{
-	internetarchive.FormatEPUB: "application/epub+zip",
-	internetarchive.FormatPDF:  "application/pdf",
+var contentTypes = map[string]string{
+	"epub": "application/epub+zip",
+	"pdf":  "application/pdf",
 }
 
 // DownloadBook streams a public domain work's ebook from the Internet
@@ -27,30 +29,59 @@ func (api *API) DownloadBook(responseWriter http.ResponseWriter, request *http.R
 			merrifiedSentinels.SendErrorResponse(responseWriter, err)
 		}
 	}()
-	scans, err := api.openLibrary.PublicScans(mux.Vars(request)["openLibraryId"])
-	if err != nil {
-		return
-	}
-	ebook, err := api.internetArchive.FindEbook(scans.ArchiveIDs)
-	if err != nil {
-		return
-	}
-	download, err := api.internetArchive.OpenEbook(request.Context(), ebook)
+	scans, ebook, download, err := api.openPublicEbook(request.Context(), mux.Vars(request)["openLibraryId"])
 	if err != nil {
 		return
 	}
 	defer download.Body.Close()
-	fileName := fmt.Sprintf("%s.%s", fileNameOf(scans.Title), ebook.Format)
-	responseWriter.Header().Set("Content-Type", contentTypes[ebook.Format])
+	sendAttachment(responseWriter, sendAttachmentInput{
+		Title:         scans.Title,
+		Format:        string(ebook.Format),
+		ContentLength: download.ContentLength,
+		Body:          download.Body,
+	})
+}
+
+// sendAttachmentInput is an ebook to send, named after Title, with
+// ContentLength -1 when unknown.
+type sendAttachmentInput struct {
+	Title         string
+	Format        string
+	ContentLength int64
+	Body          io.Reader
+}
+
+// sendAttachment streams an ebook for the browser to save.
+func sendAttachment(responseWriter http.ResponseWriter, input sendAttachmentInput) {
+	fileName := fmt.Sprintf("%s.%s", fileNameOf(input.Title), input.Format)
+	responseWriter.Header().Set("Content-Type", contentTypes[input.Format])
 	responseWriter.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": fileName}))
-	if download.ContentLength >= 0 {
-		responseWriter.Header().Set("Content-Length", fmt.Sprint(download.ContentLength))
+	if input.ContentLength >= 0 {
+		responseWriter.Header().Set("Content-Length", fmt.Sprint(input.ContentLength))
 	}
 	// Once the body has started, a failure can no longer be sent as an
 	// error response.
-	if _, copyErr := io.Copy(responseWriter, download.Body); copyErr != nil {
-		logx.Warnf("downloading %s/%s: %v", ebook.Identifier, ebook.FileName, copyErr)
+	if _, err := io.Copy(responseWriter, input.Body); err != nil {
+		logx.Warnf("sending %s: %v", fileName, err)
 	}
+}
+
+// openPublicEbook starts downloading the ebook of a public domain work from
+// the Internet Archive.
+func (api *API) openPublicEbook(ctx context.Context, openLibraryID string) (openlibrary.Scans, internetarchive.Ebook, internetarchive.Download, error) {
+	scans, err := api.openLibrary.PublicScans(openLibraryID)
+	if err != nil {
+		return openlibrary.Scans{}, internetarchive.Ebook{}, internetarchive.Download{}, err
+	}
+	ebook, err := api.internetArchive.FindEbook(scans.ArchiveIDs)
+	if err != nil {
+		return openlibrary.Scans{}, internetarchive.Ebook{}, internetarchive.Download{}, err
+	}
+	download, err := api.internetArchive.OpenEbook(ctx, ebook)
+	if err != nil {
+		return openlibrary.Scans{}, internetarchive.Ebook{}, internetarchive.Download{}, err
+	}
+	return scans, ebook, download, nil
 }
 
 // fileNameOf keeps a title to the characters safe in a file name.

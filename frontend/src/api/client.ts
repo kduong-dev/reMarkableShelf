@@ -1,4 +1,15 @@
-import type { Book, BookSearch, BookSearchResults, Device, RemarkableDocument } from './types'
+import type { Book, BookFile, BookSearch, BookSearchResults, Device, RemarkableDocument } from './types'
+
+// ApiError is a failed request, with its status so callers can tell a
+// missing resource from a failure.
+export class ApiError extends Error {
+  readonly status: number
+
+  constructor(message: string, status: number) {
+    super(message)
+    this.status = status
+  }
+}
 
 async function send(path: string, init?: RequestInit): Promise<Response> {
   const res = await fetch(`/api${path}`, {
@@ -7,7 +18,7 @@ async function send(path: string, init?: RequestInit): Promise<Response> {
   })
   if (!res.ok) {
     const body = await res.json().catch(() => null)
-    throw new Error(body?.message ?? `request to ${path} failed with status ${res.status}`)
+    throw new ApiError(body?.message ?? `request to ${path} failed with status ${res.status}`, res.status)
   }
   return res
 }
@@ -41,6 +52,25 @@ export const api = {
   updateBook: (id: string, patch: Partial<Book>) =>
     request<Book>(`/books/${id}`, { method: 'PUT', body: JSON.stringify(patch) }),
   deleteBook: (id: string) => request<void>(`/books/${id}`, { method: 'DELETE' }),
+  // getBookFile resolves to null for a book with no file saved on the server.
+  getBookFile: async (bookId: string) => {
+    try {
+      return await request<BookFile>(`/books/${bookId}/file`)
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) return null
+      throw err
+    }
+  },
+  uploadBookFile: (bookId: string, file: File) =>
+    request<BookFile>(`/books/${bookId}/file`, {
+      method: 'PUT',
+      headers: { 'Content-Type': file.type || 'application/octet-stream' },
+      body: file,
+    }),
+  // fetchBookFile saves the free ebook of a public domain book on the server.
+  fetchBookFile: (bookId: string) => request<BookFile>(`/books/${bookId}/file/fetch`, { method: 'POST' }),
+  deleteBookFile: (bookId: string) => request<void>(`/books/${bookId}/file`, { method: 'DELETE' }),
+  bookFileContentUrl: (bookId: string) => `/api/books/${bookId}/file/content`,
 
   searchBooks: (search: BookSearch, signal?: AbortSignal) => {
     const params = new URLSearchParams()

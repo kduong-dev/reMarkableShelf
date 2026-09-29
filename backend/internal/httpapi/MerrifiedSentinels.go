@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/kduong-dev/goutil/httpx"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/bookfilestore"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/bookstore"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/devicestore"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/devicesync"
@@ -45,5 +46,8 @@ var merrifiedSentinels = httpx.MerrifiedSentinels{
 	{Sentinel: openlibrary.ErrWorkNotFound, StatusCode: http.StatusNotFound, UserMessage: "Open Library has no work with that id"},
 	{Sentinel: openlibrary.ErrNotPublicDomain, StatusCode: http.StatusNotFound, UserMessage: "only public domain books can be downloaded"},
 	{Sentinel: internetarchive.ErrNoPublicEbook, StatusCode: http.StatusNotFound, UserMessage: "the Internet Archive has no free EPUB or PDF of that book"},
+	{Sentinel: bookfilestore.ErrFileNotFound, StatusCode: http.StatusNotFound, UserMessage: "that book has no file saved on the server"},
+	{Sentinel: bookfilestore.ErrUnsupportedFormat, StatusCode: http.StatusUnsupportedMediaType, UserMessage: "only EPUB and PDF files can be saved"},
+	{Sentinel: bookfilestore.ErrStorageUnavailable, StatusCode: http.StatusBadGateway, UserMessage: "the file storage service is unavailable, try again shortly"},
 	{Sentinel: internetarchive.ErrUpstreamUnavailable, StatusCode: http.StatusBadGateway, UserMessage: "the Internet Archive is unavailable, try again shortly"},
 }

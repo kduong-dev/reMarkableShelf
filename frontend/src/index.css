@@ -85,7 +85,8 @@ select {
   outline-offset: 2px;
 }
 
-button {
+button,
+a.button {
   cursor: pointer;
   border: 1px solid var(--text-muted);
   background: transparent;
@@ -96,7 +97,15 @@ button {
   transition: background-color 0.15s, border-color 0.15s, color 0.15s;
 }
 
-button:hover {
+a.button {
+  display: inline-block;
+  color: inherit;
+  font-size: 0.875rem;
+  text-decoration: none;
+}
+
+button:hover,
+a.button:hover {
   border-color: var(--ink);
   background: var(--surface);
 }
@@ -776,6 +785,61 @@ a:hover {
   padding: 20px;
   background: var(--surface);
   border-radius: var(--radius);
+}
+
+.book-file {
+  max-width: 420px;
+  margin-bottom: 32px;
+  padding: 20px;
+  background: var(--surface);
+  border-radius: var(--radius);
+}
+
+.book-file-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.book-file-label {
+  font-family: var(--font-serif);
+  font-size: 1.2rem;
+}
+
+.book-file-status,
+.book-file-delivery,
+.book-file-hint {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.book-file-hint {
+  margin: 10px 0 0;
+}
+
+.book-file-devices {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+}
+
+.book-file-devices li {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--divider);
+}
+
+.book-file-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 16px;
 }
 
 .bookmark-summary {

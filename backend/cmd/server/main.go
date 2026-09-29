@@ -9,6 +9,7 @@ import (
 	"github.com/kduong-dev/goutil/config"
 	"github.com/kduong-dev/goutil/fatal"
 	"github.com/kduong-dev/goutil/logx"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/bookfilestore"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/bookstore"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/database"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/devicestore"
@@ -18,6 +19,7 @@ import (
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/internetarchive"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/openlibrary"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/remarkable"
+	"github.com/kduong-dev/storage-service/pkg/storageservice"
 )
 
 func main() {
@@ -30,6 +32,10 @@ func main() {
 	bookStore := bookstore.NewSQLiteStore(opened)
 	deviceStore := devicestore.NewSQLiteStore(opened)
 	documentStore := documentstore.NewSQLiteStore(opened)
+	// Book files live in the storage service, reached with
+	// STORAGE_SERVICE_CLIENT_IMPLEMENTATION=HTTP, STORAGE_SERVICE_URL and
+	// STORAGE_SERVICE_API_KEY.
+	bookFileStore := bookfilestore.NewStorageServiceStore(opened, storageservice.ClientFromEnv())
 
 	// The server's key signs in to every paired tablet, so it lives beside
 	// the database on persistent storage unless SSH_KEY_PATH says otherwise.
@@ -37,6 +43,7 @@ func main() {
 	signer, err := remarkable.LoadOrCreateSigner(keyPath)
 	fatal.OnError(err, "loading SSH key: ")
 	syncer := devicesync.NewSyncer(devicesync.NewSyncerInput{
+		BookFileStore: bookFileStore,
 		BookStore:     bookStore,
 		DeviceStore:   deviceStore,
 		DocumentStore: documentStore,
@@ -54,6 +61,7 @@ func main() {
 	}
 
 	handler := httpapi.NewHandler(httpapi.NewHandlerInput{
+		BookFileStore:   bookFileStore,
 		BookStore:       bookStore,
 		DeviceStore:     deviceStore,
 		DocumentStore:   documentStore,

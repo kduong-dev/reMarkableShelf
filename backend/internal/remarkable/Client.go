@@ -1,6 +1,8 @@
 package remarkable
 
 import (
+	"io"
+
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/models"
 	"golang.org/x/crypto/ssh"
 )
@@ -48,4 +50,19 @@ type API interface {
 	// CoverImages fetches the PNG thumbnail of each requested cover, keyed by
 	// document UUID, leaving out covers the tablet hasn't rendered yet.
 	CoverImages(tablet Tablet, requests []CoverRequest) (map[string][]byte, error)
+	// CopyDocument puts an EPUB or PDF in the tablet's library, where the
+	// reading app shows it once it next starts.
+	CopyDocument(tablet Tablet, input CopyDocumentInput) error
+	// RestartApp restarts the tablet's reading app, closing whatever is
+	// open, so it loads documents copied since it started.
+	RestartApp(tablet Tablet) error
+}
+
+// CopyDocumentInput is a document to copy to a tablet: its new UUID, the
+// title the tablet's library shows, and its file.
+type CopyDocumentInput struct {
+	UUID     string
+	Title    string
+	FileType models.FileType
+	Body     io.Reader
 }

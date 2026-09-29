@@ -4,6 +4,7 @@ import { api } from '../api/client'
 import { bookFromResult } from '../bookFromResult'
 import { bookCover } from '../bookCover'
 import { cleanFileName } from '../bookSearchQuery'
+import { BookFilePanel } from '../components/BookFilePanel'
 import { Bookmark } from '../components/Bookmark'
 import { SearchModal } from '../components/SearchModal'
 import { useRefreshOnFocus } from '../useRefreshOnFocus'
@@ -146,6 +147,7 @@ export function BookDetail() {
             book={book}
             onSaved={() => navigate('/')}
           />
+          <BookFilePanel book={book} />
           <button className="danger" onClick={remove}>
             Remove from collection
           </button>

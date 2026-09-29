@@ -3,6 +3,7 @@ package remarkable
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"net"
 	"regexp"
 	"strings"
@@ -126,11 +127,17 @@ func sameKey(authorized string, key ssh.PublicKey) bool {
 
 // run executes script in a new session and returns what it printed.
 func run(connection *ssh.Client, script string) (string, error) {
+	return runWithInput(connection, script, nil)
+}
+
+// runWithInput is run with stdin read from input.
+func runWithInput(connection *ssh.Client, script string, input io.Reader) (string, error) {
 	session, err := connection.NewSession()
 	if err != nil {
 		return "", fmt.Errorf("opening SSH session: %w", err)
 	}
 	defer session.Close()
+	session.Stdin = input
 	var stdout, stderr bytes.Buffer
 	session.Stdout = &stdout
 	session.Stderr = &stderr

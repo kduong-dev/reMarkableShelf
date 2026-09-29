@@ -3,11 +3,14 @@ package devicesync
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/kduong-dev/goutil/logx"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/bookfilestore"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/bookstore"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/devicestore"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/documentstore"
@@ -19,6 +22,7 @@ import (
 // Syncs run one at a time, so a manual sync and a background one can't
 // interleave their writes.
 type Syncer struct {
+	bookFileStore bookfilestore.Store
 	bookStore     bookstore.Store
 	deviceStore   devicestore.Store
 	documentStore documentstore.Store
@@ -27,6 +31,7 @@ type Syncer struct {
 }
 
 type NewSyncerInput struct {
+	BookFileStore bookfilestore.Store
 	BookStore     bookstore.Store
 	DeviceStore   devicestore.Store
 	DocumentStore documentstore.Store
@@ -35,6 +40,7 @@ type NewSyncerInput struct {
 
 func NewSyncer(input NewSyncerInput) *Syncer {
 	return &Syncer{
+		bookFileStore: input.BookFileStore,
 		bookStore:     input.BookStore,
 		deviceStore:   input.DeviceStore,
 		documentStore: input.DocumentStore,
@@ -44,9 +50,23 @@ func NewSyncer(input NewSyncerInput) *Syncer {
 
 // SyncDevice reads every document on the device, upserts them, auto-links
 // pdf/epub documents to an existing book by exact (case-insensitive) title
-// match, then moves linked books' bookmarks to newer tablet positions.
-// Notebooks are stored but never auto-linked — see models.FileType.
+// match, copies book files to it for books with no document there, then
+// moves linked books' bookmarks to newer tablet positions. Notebooks are stored but never auto-linked — see
+// models.FileType. Copied books show on the tablet once its reading app
+// restarts, which SyncDeviceNow does.
 func (syncer *Syncer) SyncDevice(deviceID string) ([]models.RemarkableDocument, error) {
+	return syncer.syncDevice(deviceID, false)
+}
+
+// SyncDeviceNow is SyncDevice for a sync the user asked for, which also
+// restarts the tablet's reading app when copied books are waiting to show,
+// closing whatever is open. Background syncs never restart it, so they
+// can't interrupt reading.
+func (syncer *Syncer) SyncDeviceNow(deviceID string) ([]models.RemarkableDocument, error) {
+	return syncer.syncDevice(deviceID, true)
+}
+
+func (syncer *Syncer) syncDevice(deviceID string, restartApp bool) ([]models.RemarkableDocument, error) {
 	syncer.mutex.Lock()
 	defer syncer.mutex.Unlock()
 	device, err := syncer.deviceStore.Get(deviceID)
@@ -83,6 +103,15 @@ func (syncer *Syncer) SyncDevice(deviceID string) ([]models.RemarkableDocument, 
 	if err := syncer.autoLinkDocuments(device.ID); err != nil {
 		return nil, err
 	}
+	copied, err := syncer.copyBooks(device)
+	if err != nil {
+		return nil, err
+	}
+	if len(copied) > 0 {
+		if documents, err = syncer.addCopiedDocuments(device.ID, documents, copied); err != nil {
+			return nil, err
+		}
+	}
 	if err := syncer.fetchCovers(device, documents); err != nil {
 		return nil, err
 	}
@@ -93,7 +122,128 @@ func (syncer *Syncer) SyncDevice(deviceID string) ([]models.RemarkableDocument, 
 	if err := syncer.applyTabletProgress(syncedDocuments); err != nil {
 		return nil, err
 	}
+	if restartApp {
+		if err := syncer.loadCopiedBooks(device); err != nil {
+			return nil, err
+		}
+	}
 	return syncedDocuments, nil
+}
+
+// copiedBook is a book's file copied to a tablet as a new document.
+type copiedBook struct {
+	book     models.Book
+	document models.RemarkableDocument
+}
+
+// copyBooks copies each book file not yet delivered to the device. A book
+// already linked to a document on the device is recorded as delivered
+// instead of being copied again. A book that fails to copy is logged and
+// retried on the next sync, as is every book after it, since the tablet
+// has likely gone out of reach.
+func (syncer *Syncer) copyBooks(device models.Device) ([]copiedBook, error) {
+	var copied []copiedBook
+	files, err := syncer.bookFileStore.ListUndelivered(device.ID)
+	if err != nil {
+		return nil, err
+	}
+	for _, file := range files {
+		linked, err := syncer.linkedDocument(device.ID, file.BookID)
+		if err != nil {
+			return nil, err
+		}
+		now := time.Now().UTC()
+		if linked != nil {
+			err := syncer.bookFileStore.RecordDelivery(bookfilestore.RecordDeliveryInput{
+				BookID: file.BookID, DeviceID: device.ID, DocumentUUID: linked.UUID, CopiedAt: now, LoadedAt: &now,
+			})
+			if err != nil {
+				return nil, err
+			}
+			continue
+		}
+		book, err := syncer.bookStore.Get(file.BookID)
+		if err != nil {
+			return nil, err
+		}
+		documentUUID := uuid.NewString()
+		if err := syncer.copyBook(device, book, file, documentUUID); err != nil {
+			logx.Warnf("copying %q to %s (%s): %v", book.Title, device.Name, device.Host, err)
+			return copied, nil
+		}
+		err = syncer.bookFileStore.RecordDelivery(bookfilestore.RecordDeliveryInput{
+			BookID: file.BookID, DeviceID: device.ID, DocumentUUID: documentUUID, CopiedAt: now,
+		})
+		if err != nil {
+			return nil, err
+		}
+		copied = append(copied, copiedBook{book: book, document: models.RemarkableDocument{
+			UUID:         documentUUID,
+			DeviceID:     device.ID,
+			Title:        book.Title,
+			FileType:     file.Format,
+			LastModified: now,
+		}})
+	}
+	return copied, nil
+}
+
+func (syncer *Syncer) copyBook(device models.Device, book models.Book, file models.BookFile, documentUUID string) error {
+	_, body, err := syncer.bookFileStore.Open(context.Background(), file.BookID)
+	if err != nil {
+		return err
+	}
+	defer body.Close()
+	return syncer.remarkable.CopyDocument(tabletOf(device), remarkable.CopyDocumentInput{
+		UUID:     documentUUID,
+		Title:    book.Title,
+		FileType: file.Format,
+		Body:     body,
+	})
+}
+
+// addCopiedDocuments adds the documents just copied to the device's
+// synced documents, linked to their books, as the next listing would.
+func (syncer *Syncer) addCopiedDocuments(deviceID string, listed []models.RemarkableDocument, copied []copiedBook) ([]models.RemarkableDocument, error) {
+	documents := slices.Clone(listed)
+	for _, delivered := range copied {
+		documents = append(documents, delivered.document)
+	}
+	if err := syncer.documentStore.Upsert(deviceID, documents); err != nil {
+		return nil, err
+	}
+	for _, delivered := range copied {
+		if err := syncer.documentStore.LinkToBook(deviceID, delivered.document.UUID, delivered.book.ID); err != nil {
+			return nil, err
+		}
+	}
+	return documents, nil
+}
+
+func (syncer *Syncer) linkedDocument(deviceID, bookID string) (*models.RemarkableDocument, error) {
+	documents, err := syncer.documentStore.ListByBook(bookID)
+	if err != nil {
+		return nil, err
+	}
+	for _, document := range documents {
+		if document.DeviceID == deviceID {
+			return &document, nil
+		}
+	}
+	return nil, nil
+}
+
+// loadCopiedBooks restarts the device's reading app if books were copied
+// to it since it last did, so they show in its library.
+func (syncer *Syncer) loadCopiedBooks(device models.Device) error {
+	unloaded, err := syncer.bookFileStore.ListUnloaded(device.ID)
+	if err != nil || len(unloaded) == 0 {
+		return err
+	}
+	if err := syncer.remarkable.RestartApp(tabletOf(device)); err != nil {
+		return err
+	}
+	return syncer.bookFileStore.MarkLoaded(device.ID, time.Now().UTC())
 }
 
 // Run syncs every registered device each interval until ctx is done. A

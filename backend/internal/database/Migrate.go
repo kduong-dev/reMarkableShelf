@@ -53,6 +53,24 @@ CREATE TABLE IF NOT EXISTS remarkable_documents (
 );
 
 CREATE INDEX IF NOT EXISTS idx_remarkable_documents_device ON remarkable_documents(device_id);
+
+CREATE TABLE IF NOT EXISTS book_files (
+	book_id         TEXT PRIMARY KEY REFERENCES books(id) ON DELETE CASCADE,
+	storage_file_id TEXT NOT NULL,
+	format          TEXT NOT NULL,
+	size            INTEGER NOT NULL,
+	source          TEXT NOT NULL,
+	saved_at        DATETIME NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS book_file_deliveries (
+	book_id         TEXT NOT NULL REFERENCES book_files(book_id) ON DELETE CASCADE,
+	device_id       TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+	document_uuid   TEXT NOT NULL,
+	copied_at       DATETIME NOT NULL,
+	loaded_at       DATETIME,
+	PRIMARY KEY (book_id, device_id)
+);
 `
 
 // addedColumns are the columns added to the schema after its tables were

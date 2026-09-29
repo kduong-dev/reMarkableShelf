@@ -1,12 +1,16 @@
 package devicesync_test
 
 import (
+	"context"
 	"errors"
+	"io"
+	"strings"
 	"testing"
 	"time"
 
 	. "github.com/smartystreets/goconvey/convey"
 
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/bookfilestore"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/devicesync"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/models"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/remarkable"
@@ -25,6 +29,14 @@ type fakeTablet struct {
 	listErr       error
 	pairErr       error
 	pairedWith    string
+	copied        []copiedDocument
+	copyErr       error
+	restarts      int
+}
+
+type copiedDocument struct {
+	input    remarkable.CopyDocumentInput
+	contents string
 }
 
 func (tablet *fakeTablet) ListDocuments(target remarkable.Tablet) (remarkable.Listing, error) {
@@ -44,6 +56,25 @@ func (tablet *fakeTablet) CoverImages(target remarkable.Tablet, requests []remar
 		}
 	}
 	return images, nil
+}
+
+func (tablet *fakeTablet) CopyDocument(target remarkable.Tablet, input remarkable.CopyDocumentInput) error {
+	if tablet.copyErr != nil {
+		return tablet.copyErr
+	}
+	contents, err := io.ReadAll(input.Body)
+	if err != nil {
+		return err
+	}
+	tablet.copied = append(tablet.copied, copiedDocument{input: input, contents: string(contents)})
+	// The copy lands in the documents directory, so the next listing finds it.
+	tablet.documents = append(tablet.documents, models.RemarkableDocument{UUID: input.UUID, Title: input.Title, FileType: input.FileType, LastModified: time.Now().UTC()})
+	return nil
+}
+
+func (tablet *fakeTablet) RestartApp(target remarkable.Tablet) error {
+	tablet.restarts++
+	return nil
 }
 
 func (tablet *fakeTablet) Pair(target remarkable.Tablet, password string) (string, error) {
@@ -75,11 +106,12 @@ func openedDocument(title string, currentPage, pageCount int, openedAt time.Time
 
 func TestSyncDevice(t *testing.T) {
 	Convey("Given a registered tablet and a library", t, func() {
-		bookStore, deviceStore, documentStore := storetest.Open(t)
+		stores := storetest.OpenStores(t)
+		bookStore, deviceStore, documentStore, bookFileStore := stores.BookStore, stores.DeviceStore, stores.DocumentStore, stores.BookFileStore
 		device, err := deviceStore.Create(models.Device{Name: "Paper Pro", Host: "10.0.0.5"})
 		So(err, ShouldBeNil)
 		tablet := &fakeTablet{}
-		syncer := devicesync.NewSyncer(devicesync.NewSyncerInput{BookStore: bookStore, DeviceStore: deviceStore, DocumentStore: documentStore, Remarkable: tablet})
+		syncer := devicesync.NewSyncer(devicesync.NewSyncerInput{BookFileStore: bookFileStore, BookStore: bookStore, DeviceStore: deviceStore, DocumentStore: documentStore, Remarkable: tablet})
 		sync := func() models.Book {
 			_, err := syncer.SyncDevice(device.ID)
 			So(err, ShouldBeNil)
@@ -180,13 +212,14 @@ func TestSyncDevice(t *testing.T) {
 
 func TestLinkDocument(t *testing.T) {
 	Convey("Given a synced tablet document open on page 42 of 171", t, func() {
-		bookStore, deviceStore, documentStore := storetest.Open(t)
+		stores := storetest.OpenStores(t)
+		bookStore, deviceStore, documentStore, bookFileStore := stores.BookStore, stores.DeviceStore, stores.DocumentStore, stores.BookFileStore
 		device, err := deviceStore.Create(models.Device{Name: "Paper Pro", Host: "10.0.0.5"})
 		So(err, ShouldBeNil)
 		tablet := &fakeTablet{documents: []models.RemarkableDocument{
 			openedDocument("dale-carnegie.pdf", 42, 171, time.Now().UTC().Add(-time.Hour).Truncate(time.Millisecond)),
 		}}
-		syncer := devicesync.NewSyncer(devicesync.NewSyncerInput{BookStore: bookStore, DeviceStore: deviceStore, DocumentStore: documentStore, Remarkable: tablet})
+		syncer := devicesync.NewSyncer(devicesync.NewSyncerInput{BookFileStore: bookFileStore, BookStore: bookStore, DeviceStore: deviceStore, DocumentStore: documentStore, Remarkable: tablet})
 		_, err = syncer.SyncDevice(device.ID)
 		So(err, ShouldBeNil)
 		Convey("When linking it to a 280-page book", func() {
@@ -207,7 +240,8 @@ func TestLinkDocument(t *testing.T) {
 
 func TestAlignBook(t *testing.T) {
 	Convey("Given a book linked to a 171-page tablet document open on page 42", t, func() {
-		bookStore, deviceStore, documentStore := storetest.Open(t)
+		stores := storetest.OpenStores(t)
+		bookStore, deviceStore, documentStore, bookFileStore := stores.BookStore, stores.DeviceStore, stores.DocumentStore, stores.BookFileStore
 		device, err := deviceStore.Create(models.Device{Name: "Paper Pro", Host: "10.0.0.5"})
 		So(err, ShouldBeNil)
 		book, err := bookStore.Create(models.Book{Title: "Dune"})
@@ -215,7 +249,7 @@ func TestAlignBook(t *testing.T) {
 		tablet := &fakeTablet{documents: []models.RemarkableDocument{
 			openedDocument("Dune", 42, 171, time.Now().UTC().Add(-time.Hour).Truncate(time.Millisecond)),
 		}}
-		syncer := devicesync.NewSyncer(devicesync.NewSyncerInput{BookStore: bookStore, DeviceStore: deviceStore, DocumentStore: documentStore, Remarkable: tablet})
+		syncer := devicesync.NewSyncer(devicesync.NewSyncerInput{BookFileStore: bookFileStore, BookStore: bookStore, DeviceStore: deviceStore, DocumentStore: documentStore, Remarkable: tablet})
 		_, err = syncer.SyncDevice(device.ID)
 		So(err, ShouldBeNil)
 		Convey("When an edit gives the book another edition's page count", func() {
@@ -234,13 +268,14 @@ func TestAlignBook(t *testing.T) {
 
 func TestUnlinkDocument(t *testing.T) {
 	Convey("Given a tablet document auto-linked to the book of the same title", t, func() {
-		bookStore, deviceStore, documentStore := storetest.Open(t)
+		stores := storetest.OpenStores(t)
+		bookStore, deviceStore, documentStore, bookFileStore := stores.BookStore, stores.DeviceStore, stores.DocumentStore, stores.BookFileStore
 		device, err := deviceStore.Create(models.Device{Name: "Paper Pro", Host: "10.0.0.5"})
 		So(err, ShouldBeNil)
 		book, err := bookStore.Create(models.Book{Title: "Dune"})
 		So(err, ShouldBeNil)
 		tablet := &fakeTablet{documents: []models.RemarkableDocument{{UUID: "document-1", Title: "Dune", FileType: models.FileTypePDF, LastModified: time.Now().UTC()}}}
-		syncer := devicesync.NewSyncer(devicesync.NewSyncerInput{BookStore: bookStore, DeviceStore: deviceStore, DocumentStore: documentStore, Remarkable: tablet})
+		syncer := devicesync.NewSyncer(devicesync.NewSyncerInput{BookFileStore: bookFileStore, BookStore: bookStore, DeviceStore: deviceStore, DocumentStore: documentStore, Remarkable: tablet})
 		linkedTo := func() *string {
 			documents, err := syncer.SyncDevice(device.ID)
 			So(err, ShouldBeNil)
@@ -262,7 +297,8 @@ func TestUnlinkDocument(t *testing.T) {
 
 func TestCovers(t *testing.T) {
 	Convey("Given a tablet with a PDF and a notebook whose covers are rendered", t, func() {
-		bookStore, deviceStore, documentStore := storetest.Open(t)
+		stores := storetest.OpenStores(t)
+		bookStore, deviceStore, documentStore, bookFileStore := stores.BookStore, stores.DeviceStore, stores.DocumentStore, stores.BookFileStore
 		device, err := deviceStore.Create(models.Device{Name: "Paper Pro", Host: "10.0.0.5"})
 		So(err, ShouldBeNil)
 		modifiedAt := time.Now().UTC().Add(-time.Hour).Truncate(time.Millisecond)
@@ -272,7 +308,7 @@ func TestCovers(t *testing.T) {
 			documents: []models.RemarkableDocument{pdf, notebook},
 			covers:    map[string][]byte{"document-1": []byte("dune cover"), "notebook-1": []byte("notes cover")},
 		}
-		syncer := devicesync.NewSyncer(devicesync.NewSyncerInput{BookStore: bookStore, DeviceStore: deviceStore, DocumentStore: documentStore, Remarkable: tablet})
+		syncer := devicesync.NewSyncer(devicesync.NewSyncerInput{BookFileStore: bookFileStore, BookStore: bookStore, DeviceStore: deviceStore, DocumentStore: documentStore, Remarkable: tablet})
 		book, err := bookStore.Create(models.Book{Title: "Dune"})
 		So(err, ShouldBeNil)
 		_, err = syncer.SyncDevice(device.ID)
@@ -314,13 +350,14 @@ func TestCovers(t *testing.T) {
 		})
 	})
 	Convey("Given a PDF whose cover the tablet hasn't rendered yet", t, func() {
-		bookStore, deviceStore, documentStore := storetest.Open(t)
+		stores := storetest.OpenStores(t)
+		bookStore, deviceStore, documentStore, bookFileStore := stores.BookStore, stores.DeviceStore, stores.DocumentStore, stores.BookFileStore
 		device, err := deviceStore.Create(models.Device{Name: "Paper Pro", Host: "10.0.0.5"})
 		So(err, ShouldBeNil)
 		tablet := &fakeTablet{documents: []models.RemarkableDocument{
 			{UUID: "document-1", Title: "Dune", FileType: models.FileTypePDF, LastModified: time.Now().UTC(), CoverPageID: "page-1"},
 		}}
-		syncer := devicesync.NewSyncer(devicesync.NewSyncerInput{BookStore: bookStore, DeviceStore: deviceStore, DocumentStore: documentStore, Remarkable: tablet})
+		syncer := devicesync.NewSyncer(devicesync.NewSyncerInput{BookFileStore: bookFileStore, BookStore: bookStore, DeviceStore: deviceStore, DocumentStore: documentStore, Remarkable: tablet})
 		_, err = syncer.SyncDevice(device.ID)
 		So(err, ShouldBeNil)
 		Convey("When it's rendered before the next sync", func() {
@@ -338,12 +375,13 @@ func TestCovers(t *testing.T) {
 
 func TestTabletIdentity(t *testing.T) {
 	Convey("Given a device registered before host keys were recorded", t, func() {
-		bookStore, deviceStore, documentStore := storetest.Open(t)
+		stores := storetest.OpenStores(t)
+		bookStore, deviceStore, documentStore, bookFileStore := stores.BookStore, stores.DeviceStore, stores.DocumentStore, stores.BookFileStore
 		pairedAt := time.Now().UTC()
 		device, err := deviceStore.Create(models.Device{Name: "Paper Pro", Host: "10.0.0.5", PairedAt: &pairedAt})
 		So(err, ShouldBeNil)
 		tablet := &fakeTablet{hostKey: "ssh-ed25519 AAAA-real-tablet"}
-		syncer := devicesync.NewSyncer(devicesync.NewSyncerInput{BookStore: bookStore, DeviceStore: deviceStore, DocumentStore: documentStore, Remarkable: tablet})
+		syncer := devicesync.NewSyncer(devicesync.NewSyncerInput{BookFileStore: bookFileStore, BookStore: bookStore, DeviceStore: deviceStore, DocumentStore: documentStore, Remarkable: tablet})
 		Convey("When it syncs", func() {
 			_, err := syncer.SyncDevice(device.ID)
 			Convey("Then the host key it presented is recorded and required from then on", func() {
@@ -389,9 +427,10 @@ func TestTabletIdentity(t *testing.T) {
 
 func TestPairing(t *testing.T) {
 	Convey("Given a syncer with no devices", t, func() {
-		bookStore, deviceStore, documentStore := storetest.Open(t)
+		stores := storetest.OpenStores(t)
+		bookStore, deviceStore, documentStore, bookFileStore := stores.BookStore, stores.DeviceStore, stores.DocumentStore, stores.BookFileStore
 		tablet := &fakeTablet{}
-		syncer := devicesync.NewSyncer(devicesync.NewSyncerInput{BookStore: bookStore, DeviceStore: deviceStore, DocumentStore: documentStore, Remarkable: tablet})
+		syncer := devicesync.NewSyncer(devicesync.NewSyncerInput{BookFileStore: bookFileStore, BookStore: bookStore, DeviceStore: deviceStore, DocumentStore: documentStore, Remarkable: tablet})
 		register := func() (models.Device, error) {
 			return syncer.RegisterDevice(devicesync.RegisterDeviceInput{Name: " Paper Pro ", Host: "10.0.0.5", Password: "secret"})
 		}
@@ -469,6 +508,101 @@ func TestPairing(t *testing.T) {
 			_, err := syncer.RegisterDevice(devicesync.RegisterDeviceInput{Name: "Paper Pro", Password: "secret"})
 			Convey("Then it returns ErrDeviceDetailsRequired", func() {
 				So(errors.Is(err, devicesync.ErrDeviceDetailsRequired), ShouldBeTrue)
+			})
+		})
+	})
+}
+
+func TestSyncCopiesBooks(t *testing.T) {
+	Convey("Given a paired tablet and a book with a file saved on the server", t, func() {
+		stores := storetest.OpenStores(t)
+		device, err := stores.DeviceStore.Create(models.Device{Name: "Paper Pro", Host: "10.0.0.5"})
+		So(err, ShouldBeNil)
+		book, err := stores.BookStore.Create(models.Book{Title: "Pride and Prejudice"})
+		So(err, ShouldBeNil)
+		_, err = stores.BookFileStore.Save(context.Background(), bookfilestore.SaveInput{
+			BookID: book.ID, Source: models.BookFileSourceUpload, Body: strings.NewReader("%PDF-1.7 the book"),
+		})
+		So(err, ShouldBeNil)
+		tablet := &fakeTablet{}
+		syncer := devicesync.NewSyncer(devicesync.NewSyncerInput{
+			BookFileStore: stores.BookFileStore,
+			BookStore:     stores.BookStore,
+			DeviceStore:   stores.DeviceStore,
+			DocumentStore: stores.DocumentStore,
+			Remarkable:    tablet,
+		})
+		Convey("When syncing in the background", func() {
+			_, err := syncer.SyncDevice(device.ID)
+			So(err, ShouldBeNil)
+			Convey("Then the file is copied to the tablet under the book's title", func() {
+				So(tablet.copied, ShouldHaveLength, 1)
+				So(tablet.copied[0].input.Title, ShouldEqual, "Pride and Prejudice")
+				So(tablet.copied[0].input.FileType, ShouldEqual, models.FileTypePDF)
+				So(tablet.copied[0].contents, ShouldEqual, "%PDF-1.7 the book")
+			})
+			Convey("Then the copy is linked to the book", func() {
+				documents, err := stores.DocumentStore.ListByBook(book.ID)
+				So(err, ShouldBeNil)
+				So(documents, ShouldHaveLength, 1)
+				So(documents[0].UUID, ShouldEqual, tablet.copied[0].input.UUID)
+			})
+			Convey("Then the reading app isn't restarted, leaving the copy waiting to load", func() {
+				So(tablet.restarts, ShouldEqual, 0)
+				file, err := stores.BookFileStore.Get(book.ID)
+				So(err, ShouldBeNil)
+				So(file.Deliveries, ShouldHaveLength, 1)
+				So(file.Deliveries[0].LoadedAt, ShouldBeNil)
+			})
+			Convey("And syncing again", func() {
+				_, err := syncer.SyncDevice(device.ID)
+				So(err, ShouldBeNil)
+				Convey("Then it isn't copied twice", func() {
+					So(tablet.copied, ShouldHaveLength, 1)
+				})
+			})
+			Convey("And the user syncing now", func() {
+				_, err := syncer.SyncDeviceNow(device.ID)
+				So(err, ShouldBeNil)
+				Convey("Then the reading app restarts to load the copy", func() {
+					So(tablet.restarts, ShouldEqual, 1)
+					file, err := stores.BookFileStore.Get(book.ID)
+					So(err, ShouldBeNil)
+					So(file.Deliveries[0].LoadedAt, ShouldNotBeNil)
+				})
+				Convey("And syncing now once more", func() {
+					_, err := syncer.SyncDeviceNow(device.ID)
+					So(err, ShouldBeNil)
+					Convey("Then the reading app isn't restarted again", func() {
+						So(tablet.restarts, ShouldEqual, 1)
+					})
+				})
+			})
+		})
+		Convey("When the book is already on the tablet", func() {
+			tablet.documents = []models.RemarkableDocument{{UUID: "document-1", Title: "Pride and Prejudice", FileType: models.FileTypeEPUB}}
+			_, err := syncer.SyncDevice(device.ID)
+			So(err, ShouldBeNil)
+			_, err = syncer.SyncDeviceNow(device.ID)
+			So(err, ShouldBeNil)
+			Convey("Then sync records the document linked by title instead of copying the file", func() {
+				So(tablet.copied, ShouldBeEmpty)
+				So(tablet.restarts, ShouldEqual, 0)
+				file, err := stores.BookFileStore.Get(book.ID)
+				So(err, ShouldBeNil)
+				So(file.Deliveries, ShouldHaveLength, 1)
+				So(file.Deliveries[0].DocumentUUID, ShouldEqual, "document-1")
+			})
+		})
+		Convey("When copying fails", func() {
+			tablet.copyErr = errors.New("connection reset")
+			_, err := syncer.SyncDeviceNow(device.ID)
+			Convey("Then the sync still succeeds, and the file waits for the next sync", func() {
+				So(err, ShouldBeNil)
+				So(tablet.restarts, ShouldEqual, 0)
+				undelivered, err := stores.BookFileStore.ListUndelivered(device.ID)
+				So(err, ShouldBeNil)
+				So(undelivered, ShouldHaveLength, 1)
 			})
 		})
 	})

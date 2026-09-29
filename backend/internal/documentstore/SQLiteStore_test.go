@@ -1,11 +1,13 @@
 package documentstore_test
 
 import (
+	"errors"
 	"testing"
 	"time"
 
 	. "github.com/smartystreets/goconvey/convey"
 
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/documentstore"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/models"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/storetest"
 )
@@ -86,6 +88,57 @@ func TestReplaceFolders(t *testing.T) {
 				folders, err := documentStore.ListFolders(device.ID)
 				So(err, ShouldBeNil)
 				So(folders, ShouldResemble, []models.RemarkableFolder{{UUID: "books", Title: "Reading"}})
+			})
+		})
+	})
+}
+
+func TestSetNotABook(t *testing.T) {
+	Convey("Given a synced PDF linked to a book", t, func() {
+		bookStore, deviceStore, documentStore := storetest.Open(t)
+		device, err := deviceStore.Create(models.Device{Name: "Paper Pro", Host: "10.0.0.5"})
+		So(err, ShouldBeNil)
+		book, err := bookStore.Create(models.Book{Title: "Journal 2025"})
+		So(err, ShouldBeNil)
+		journal := models.RemarkableDocument{UUID: "journal", Title: "Journal 2025", FileType: models.FileTypePDF, LastModified: time.Now().UTC()}
+		So(documentStore.Upsert(device.ID, []models.RemarkableDocument{journal}), ShouldBeNil)
+		So(documentStore.LinkToBook(device.ID, "journal", book.ID), ShouldBeNil)
+		stored := func() models.RemarkableDocument {
+			documents, err := documentStore.ListByDevice(device.ID)
+			So(err, ShouldBeNil)
+			So(documents, ShouldHaveLength, 1)
+			return documents[0]
+		}
+		Convey("When marking it not a book", func() {
+			So(documentStore.SetNotABook(device.ID, "journal", true), ShouldBeNil)
+			Convey("Then it's marked and unlinked", func() {
+				document := stored()
+				So(document.NotABook, ShouldBeTrue)
+				So(document.LinkedBookID, ShouldBeNil)
+			})
+			Convey("Then the mark survives the next sync", func() {
+				So(documentStore.Upsert(device.ID, []models.RemarkableDocument{journal}), ShouldBeNil)
+				So(stored().NotABook, ShouldBeTrue)
+			})
+			Convey("And clearing the mark", func() {
+				So(documentStore.SetNotABook(device.ID, "journal", false), ShouldBeNil)
+				Convey("Then it's unmarked, still unlinked", func() {
+					document := stored()
+					So(document.NotABook, ShouldBeFalse)
+					So(document.LinkedBookID, ShouldBeNil)
+				})
+			})
+			Convey("And linking it to a book", func() {
+				So(documentStore.LinkToBook(device.ID, "journal", book.ID), ShouldBeNil)
+				Convey("Then the mark is cleared", func() {
+					So(stored().NotABook, ShouldBeFalse)
+				})
+			})
+		})
+		Convey("When marking a document the device doesn't have", func() {
+			err := documentStore.SetNotABook(device.ID, "missing", true)
+			Convey("Then it returns ErrDocumentNotFound", func() {
+				So(errors.Is(err, documentstore.ErrDocumentNotFound), ShouldBeTrue)
 			})
 		})
 	})

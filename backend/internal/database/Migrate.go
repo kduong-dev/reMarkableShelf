@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS remarkable_documents (
 	cover_checked_at DATETIME,
 	parent_uuid     TEXT NOT NULL DEFAULT '',
 	removed_at      DATETIME,
+	not_a_book      INTEGER NOT NULL DEFAULT 0,
 	PRIMARY KEY (uuid, device_id)
 );
 
@@ -109,6 +110,7 @@ var addedColumns = []struct {
 	{"remarkable_documents", "parent_uuid", "TEXT NOT NULL DEFAULT ''"},
 	{"remarkable_documents", "removed_at", "DATETIME"},
 	{"devices", "downloads_folder_uuid", "TEXT NOT NULL DEFAULT ''"},
+	{"remarkable_documents", "not_a_book", "INTEGER NOT NULL DEFAULT 0"},
 }
 
 func migrate(database *sql.DB) error {

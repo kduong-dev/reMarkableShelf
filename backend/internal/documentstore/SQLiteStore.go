@@ -109,7 +109,7 @@ func (documentStore *SQLiteStore) ListByBook(bookID string) ([]models.Remarkable
 
 func (documentStore *SQLiteStore) list(where, arg string) ([]models.RemarkableDocument, error) {
 	rows, err := documentStore.database.Query(
-		`SELECT uuid, device_id, title, file_type, last_modified, linked_book_id, current_page, page_count, position_updated_at, book_title, book_author, auto_link_dismissed, cover_image IS NOT NULL, cover_checked_at, parent_uuid
+		`SELECT uuid, device_id, title, file_type, last_modified, linked_book_id, current_page, page_count, position_updated_at, book_title, book_author, auto_link_dismissed, cover_image IS NOT NULL, cover_checked_at, parent_uuid, not_a_book
 		 FROM remarkable_documents WHERE `+where+` ORDER BY last_modified DESC`,
 		arg,
 	)
@@ -121,7 +121,7 @@ func (documentStore *SQLiteStore) list(where, arg string) ([]models.RemarkableDo
 	docs := []models.RemarkableDocument{}
 	for rows.Next() {
 		var d models.RemarkableDocument
-		if err := rows.Scan(&d.UUID, &d.DeviceID, &d.Title, &d.FileType, &d.LastModified, &d.LinkedBookID, &d.CurrentPage, &d.PageCount, &d.PositionUpdatedAt, &d.BookTitle, &d.BookAuthor, &d.AutoLinkDismissed, &d.HasCover, &d.CoverCheckedAt, &d.ParentUUID); err != nil {
+		if err := rows.Scan(&d.UUID, &d.DeviceID, &d.Title, &d.FileType, &d.LastModified, &d.LinkedBookID, &d.CurrentPage, &d.PageCount, &d.PositionUpdatedAt, &d.BookTitle, &d.BookAuthor, &d.AutoLinkDismissed, &d.HasCover, &d.CoverCheckedAt, &d.ParentUUID, &d.NotABook); err != nil {
 			return nil, err
 		}
 		docs = append(docs, d)
@@ -131,10 +131,25 @@ func (documentStore *SQLiteStore) list(where, arg string) ([]models.RemarkableDo
 
 func (documentStore *SQLiteStore) LinkToBook(deviceID, docUUID, bookID string) error {
 	_, err := documentStore.database.Exec(
-		`UPDATE remarkable_documents SET linked_book_id = ?, auto_link_dismissed = 0 WHERE device_id = ? AND uuid = ?`,
+		`UPDATE remarkable_documents SET linked_book_id = ?, auto_link_dismissed = 0, not_a_book = 0 WHERE device_id = ? AND uuid = ?`,
 		bookID, deviceID, docUUID,
 	)
 	return err
+}
+
+func (documentStore *SQLiteStore) SetNotABook(deviceID, docUUID string, notABook bool) error {
+	result, err := documentStore.database.Exec(
+		`UPDATE remarkable_documents SET not_a_book = ?, linked_book_id = CASE WHEN ? THEN NULL ELSE linked_book_id END
+		 WHERE device_id = ? AND uuid = ? AND removed_at IS NULL`,
+		notABook, notABook, deviceID, docUUID,
+	)
+	if err != nil {
+		return fmt.Errorf("marking document: %w", err)
+	}
+	if count, _ := result.RowsAffected(); count == 0 {
+		return fmt.Errorf("document %q on device %q: %w", docUUID, deviceID, ErrDocumentNotFound)
+	}
+	return nil
 }
 
 func (documentStore *SQLiteStore) Unlink(deviceID, docUUID string) error {

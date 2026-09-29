@@ -137,10 +137,25 @@ export function Sync() {
     setDocs((prev) => prev.map((d) => (d.uuid === doc.uuid ? { ...d, linkedBookId: undefined } : d)))
   }
 
+  async function setNotABook(doc: RemarkableDocument, notABook: boolean) {
+    setError(null)
+    try {
+      await api.setNotABook(selected, doc.uuid, notABook)
+      setDocs((prev) =>
+        prev.map((d) =>
+          d.uuid === doc.uuid ? { ...d, notABook, linkedBookId: notABook ? undefined : d.linkedBookId } : d,
+        ),
+      )
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'failed to mark the document')
+    }
+  }
+
   async function linkToExisting(doc: RemarkableDocument, bookId: string) {
     if (!bookId) return
     await api.linkDocument(selected, doc.uuid, bookId)
-    setDocs((prev) => prev.map((d) => (d.uuid === doc.uuid ? { ...d, linkedBookId: bookId } : d)))
+    // Linking clears a not-a-book mark on the server too.
+    setDocs((prev) => prev.map((d) => (d.uuid === doc.uuid ? { ...d, linkedBookId: bookId, notABook: false } : d)))
   }
 
   const selectedDevice = devices.find((d) => d.id === selected)
@@ -284,6 +299,7 @@ export function Sync() {
           onLink={linkToExisting}
           onFind={setFinding}
           onAddAsIs={addAsNewBook}
+          onSetNotABook={setNotABook}
         />
       )}
 

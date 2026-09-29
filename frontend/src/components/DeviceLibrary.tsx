@@ -20,6 +20,7 @@ export function DeviceLibrary({
   onLink,
   onFind,
   onAddAsIs,
+  onSetNotABook,
 }: {
   deviceId: string
   folders: RemarkableFolder[]
@@ -29,6 +30,7 @@ export function DeviceLibrary({
   onLink: (document: RemarkableDocument, bookId: string) => void
   onFind: (document: RemarkableDocument) => void
   onAddAsIs: (document: RemarkableDocument) => void
+  onSetNotABook: (document: RemarkableDocument, notABook: boolean) => void
 }) {
   const [searchParams, setSearchParams] = useSearchParams()
   const [sort, setSort] = useState<Sort>('name')
@@ -106,7 +108,14 @@ export function DeviceLibrary({
               </span>
             )}
             <span className="badge badge-filetype">{document.fileType}</span>
-            {document.fileType === 'notebook' ? null : document.linkedBookId ? (
+            {document.fileType === 'notebook' ? null : document.notABook ? (
+              <span className="linked">
+                Not a book
+                <button className="text-button" onClick={() => onSetNotABook(document, false)}>
+                  It's a book
+                </button>
+              </span>
+            ) : document.linkedBookId ? (
               <span className="linked">
                 Linked to{' '}
                 <Link to={`/books/${document.linkedBookId}`}>
@@ -133,6 +142,13 @@ export function DeviceLibrary({
                 </button>
                 <button className="text-button" onClick={() => onAddAsIs(document)}>
                   Add as is
+                </button>
+                <button
+                  className="text-button"
+                  onClick={() => onSetNotABook(document, true)}
+                  title="For a planner, template or manual: never link it to a book"
+                >
+                  Not a book
                 </button>
               </div>
             )}

@@ -23,7 +23,12 @@ type Store interface {
 	// ReplaceFolders replaces a device's folders with the freshly-synced ones.
 	ReplaceFolders(deviceID string, folders []models.RemarkableFolder) error
 	ListFolders(deviceID string) ([]models.RemarkableFolder, error)
+	// LinkToBook links a document to a book, which also clears any mark that
+	// it's not a book.
 	LinkToBook(deviceID, documentUUID, bookID string) error
+	// SetNotABook marks a document as not a book, unlinking it, or clears
+	// the mark.
+	SetNotABook(deviceID, documentUUID string, notABook bool) error
 	// Unlink detaches a document from its book and stops sync linking it
 	// again by title.
 	Unlink(deviceID, documentUUID string) error

@@ -113,6 +113,10 @@ export const api = {
   listFolders: (deviceId: string) => requestList<RemarkableFolder>(`/devices/${deviceId}/folders`),
   unlinkDocument: (deviceId: string, uuid: string) =>
     request<void>(`/devices/${deviceId}/documents/${uuid}/link`, { method: 'DELETE' }),
+  // setNotABook marks a tablet document as not a book, which unlinks it, or
+  // clears the mark.
+  setNotABook: (deviceId: string, uuid: string, notABook: boolean) =>
+    request<void>(`/devices/${deviceId}/documents/${uuid}/not-a-book`, { method: notABook ? 'POST' : 'DELETE' }),
   linkDocument: (deviceId: string, uuid: string, bookId: string) =>
     request<void>(`/devices/${deviceId}/documents/${uuid}/link`, {
       method: 'POST',

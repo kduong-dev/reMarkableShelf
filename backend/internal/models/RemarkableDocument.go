@@ -47,6 +47,9 @@ type RemarkableDocument struct {
 	HasCover          bool       `json:"hasCover"`
 	CoverCheckedAt    *time.Time `json:"-"`
 	ParentUUID        string     `json:"parentUuid,omitempty"`
+	// NotABook marks a PDF or EPUB the user says isn't a book, such as a
+	// planner template, so it's never linked to one.
+	NotABook bool `json:"notABook,omitempty"`
 }
 
 // TrashFolderUUID is the parent the tablet gives documents and folders in

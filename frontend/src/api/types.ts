@@ -48,6 +48,9 @@ export interface RemarkableDocument {
   // parentUuid is the folder holding the document on the tablet: unset at
   // the top of its library, "trash" in its trash.
   parentUuid?: string
+  // notABook marks a PDF or EPUB the user says isn't a book, such as a
+  // planner template, so it's never linked to one.
+  notABook?: boolean
 }
 
 export interface RemarkableFolder {

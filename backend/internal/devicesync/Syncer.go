@@ -499,7 +499,7 @@ func (syncer *Syncer) autoLinkDocuments(deviceID string) error {
 		booksByTitle[strings.ToLower(strings.TrimSpace(book.Title))] = book
 	}
 	for _, document := range documents {
-		if document.LinkedBookID != nil || document.AutoLinkDismissed || document.FileType == models.FileTypeNotebook {
+		if document.LinkedBookID != nil || document.AutoLinkDismissed || document.NotABook || document.FileType == models.FileTypeNotebook {
 			continue
 		}
 		book, found := booksByTitle[strings.ToLower(strings.TrimSpace(document.Title))]

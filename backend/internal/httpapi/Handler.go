@@ -59,5 +59,7 @@ func NewHandler(input NewHandlerInput) http.Handler {
 	apiRouter.HandleFunc("/devices/{id}/documents/{uuid}/cover", api.GetDocumentCover).Methods(http.MethodGet)
 	apiRouter.HandleFunc("/devices/{id}/documents/{uuid}/link", api.LinkDocument).Methods(http.MethodPost)
 	apiRouter.HandleFunc("/devices/{id}/documents/{uuid}/link", api.UnlinkDocument).Methods(http.MethodDelete)
+	apiRouter.HandleFunc("/devices/{id}/documents/{uuid}/not-a-book", api.MarkNotABook).Methods(http.MethodPost)
+	apiRouter.HandleFunc("/devices/{id}/documents/{uuid}/not-a-book", api.UnmarkNotABook).Methods(http.MethodDelete)
 	return httpx.HandlerWithCORS(router)
 }

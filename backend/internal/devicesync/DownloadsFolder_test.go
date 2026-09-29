@@ -123,3 +123,31 @@ func TestSyncCopiesIntoDownloadsFolder(t *testing.T) {
 		})
 	})
 }
+
+func TestSyncSkipsNotABook(t *testing.T) {
+	Convey("Given a book titled like a PDF on the tablet that's marked not a book", t, func() {
+		stores := storetest.OpenStores(t)
+		device, err := stores.DeviceStore.Create(models.Device{Name: "Paper Pro", Host: "10.0.0.5"})
+		So(err, ShouldBeNil)
+		_, err = stores.BookStore.Create(models.Book{Title: "Journal 2025"})
+		So(err, ShouldBeNil)
+		tablet := &fakeTablet{documents: []models.RemarkableDocument{{UUID: "journal", Title: "Journal 2025", FileType: models.FileTypePDF}}}
+		So(stores.DocumentStore.Upsert(device.ID, tablet.documents), ShouldBeNil)
+		So(stores.DocumentStore.SetNotABook(device.ID, "journal", true), ShouldBeNil)
+		syncer := devicesync.NewSyncer(devicesync.NewSyncerInput{
+			BookFileStore: stores.BookFileStore,
+			BookStore:     stores.BookStore,
+			DeviceStore:   stores.DeviceStore,
+			DocumentStore: stores.DocumentStore,
+			Remarkable:    tablet,
+		})
+		Convey("When syncing", func() {
+			documents, err := syncer.SyncDevice(device.ID)
+			Convey("Then it isn't linked by its title", func() {
+				So(err, ShouldBeNil)
+				So(documents[0].NotABook, ShouldBeTrue)
+				So(documents[0].LinkedBookID, ShouldBeNil)
+			})
+		})
+	})
+}

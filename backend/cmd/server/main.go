@@ -15,6 +15,7 @@ import (
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/devicesync"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/documentstore"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/httpapi"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/internetarchive"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/openlibrary"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/remarkable"
 )
@@ -53,11 +54,12 @@ func main() {
 	}
 
 	handler := httpapi.NewHandler(httpapi.NewHandlerInput{
-		BookStore:     bookStore,
-		DeviceStore:   deviceStore,
-		DocumentStore: documentStore,
-		OpenLibrary:   openlibrary.NewClient(),
-		Syncer:        syncer,
+		BookStore:       bookStore,
+		DeviceStore:     deviceStore,
+		DocumentStore:   documentStore,
+		InternetArchive: internetarchive.NewClient(),
+		OpenLibrary:     openlibrary.NewClient(),
+		Syncer:          syncer,
 	})
 
 	logx.Noticef("reMarkable Shelf server listening on :%s (db=%s)", port, dbPath)

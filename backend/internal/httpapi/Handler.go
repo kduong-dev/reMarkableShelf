@@ -9,24 +9,27 @@ import (
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/devicestore"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/devicesync"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/documentstore"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/internetarchive"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/openlibrary"
 )
 
 type NewHandlerInput struct {
-	BookStore     bookstore.Store
-	DeviceStore   devicestore.Store
-	DocumentStore documentstore.Store
-	OpenLibrary   openlibrary.API
-	Syncer        *devicesync.Syncer
+	BookStore       bookstore.Store
+	DeviceStore     devicestore.Store
+	DocumentStore   documentstore.Store
+	InternetArchive internetarchive.API
+	OpenLibrary     openlibrary.API
+	Syncer          *devicesync.Syncer
 }
 
 func NewHandler(input NewHandlerInput) http.Handler {
 	api := &API{
-		bookStore:     input.BookStore,
-		deviceStore:   input.DeviceStore,
-		documentStore: input.DocumentStore,
-		openLibrary:   input.OpenLibrary,
-		syncer:        input.Syncer,
+		bookStore:       input.BookStore,
+		deviceStore:     input.DeviceStore,
+		documentStore:   input.DocumentStore,
+		internetArchive: input.InternetArchive,
+		openLibrary:     input.OpenLibrary,
+		syncer:          input.Syncer,
 	}
 	router := mux.NewRouter().StrictSlash(true)
 	apiRouter := router.PathPrefix("/api").Subrouter()
@@ -36,6 +39,7 @@ func NewHandler(input NewHandlerInput) http.Handler {
 	apiRouter.HandleFunc("/books/{id}", api.UpdateBook).Methods(http.MethodPut)
 	apiRouter.HandleFunc("/books/{id}", api.DeleteBook).Methods(http.MethodDelete)
 	apiRouter.HandleFunc("/search/books", api.SearchBooks).Methods(http.MethodGet)
+	apiRouter.HandleFunc("/search/books/{openLibraryId}/download", api.DownloadBook).Methods(http.MethodGet)
 	apiRouter.HandleFunc("/devices", api.ListDevices).Methods(http.MethodGet)
 	apiRouter.HandleFunc("/devices", api.CreateDevice).Methods(http.MethodPost)
 	apiRouter.HandleFunc("/devices/{id}", api.UpdateDevice).Methods(http.MethodPut)

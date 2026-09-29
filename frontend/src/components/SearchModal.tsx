@@ -62,6 +62,17 @@ const eras: Array<{ label: string; from?: number; to?: number }> = [
   { label: '2010 onwards', from: 2010 },
 ]
 
+// saveFile hands the file to the browser to save, as if it were a link's
+// download.
+function saveFile(file: Blob, fileName: string) {
+  const url = URL.createObjectURL(file)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName
+  link.click()
+  setTimeout(() => URL.revokeObjectURL(url))
+}
+
 function resultDetails(result: BookSearchResult): string {
   return [
     result.author,
@@ -107,6 +118,7 @@ export function SearchModal({
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [addingId, setAddingId] = useState<string | null>(null)
+  const [downloadingId, setDownloadingId] = useState<string | null>(null)
   // Aborts an in-flight "Load more" when the search it extends changes.
   const loadMoreController = useRef<AbortController | null>(null)
 
@@ -192,6 +204,19 @@ export function SearchModal({
       setError(err instanceof Error ? err.message : 'something went wrong')
     } finally {
       setAddingId(null)
+    }
+  }
+
+  async function download(result: BookSearchResult) {
+    setDownloadingId(result.openLibraryId)
+    setError(null)
+    try {
+      const { file, fileName } = await api.downloadBook(result.openLibraryId)
+      saveFile(file, fileName)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'download failed')
+    } finally {
+      setDownloadingId(null)
     }
   }
 
@@ -298,26 +323,37 @@ export function SearchModal({
                   <div className="search-result-title">{result.title}</div>
                   <div className="search-result-author">{resultDetails(result)}</div>
                 </div>
-                {onShelf && onChooseShelved ? (
-                  <button
-                    onClick={() => choose(result.openLibraryId, () => onChooseShelved(onShelf))}
-                    disabled={addingId === result.openLibraryId}
-                    title="Already on your shelf"
-                  >
-                    {addingId === result.openLibraryId ? 'Linking…' : 'Link to shelf'}
-                  </button>
-                ) : onShelf ? (
-                  <Link to={`/books/${onShelf.id}`} className="on-shelf">
-                    On your shelf
-                  </Link>
-                ) : (
-                  <button
-                    onClick={() => choose(result.openLibraryId, () => onChoose(result))}
-                    disabled={addingId === result.openLibraryId}
-                  >
-                    {addingId === result.openLibraryId ? 'Saving…' : chooseLabel}
-                  </button>
-                )}
+                <div className="search-result-actions">
+                  {onShelf && onChooseShelved ? (
+                    <button
+                      onClick={() => choose(result.openLibraryId, () => onChooseShelved(onShelf))}
+                      disabled={addingId === result.openLibraryId}
+                      title="Already on your shelf"
+                    >
+                      {addingId === result.openLibraryId ? 'Linking…' : 'Link to shelf'}
+                    </button>
+                  ) : onShelf ? (
+                    <Link to={`/books/${onShelf.id}`} className="on-shelf">
+                      On your shelf
+                    </Link>
+                  ) : (
+                    <button
+                      onClick={() => choose(result.openLibraryId, () => onChoose(result))}
+                      disabled={addingId === result.openLibraryId}
+                    >
+                      {addingId === result.openLibraryId ? 'Saving…' : chooseLabel}
+                    </button>
+                  )}
+                  {result.downloadable && (
+                    <button
+                      onClick={() => download(result)}
+                      disabled={downloadingId === result.openLibraryId}
+                      title="Download a free public domain ebook"
+                    >
+                      {downloadingId === result.openLibraryId ? 'Downloading…' : 'Download'}
+                    </button>
+                  )}
+                </div>
               </li>
             )
           })}

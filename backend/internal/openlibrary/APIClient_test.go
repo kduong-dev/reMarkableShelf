@@ -78,10 +78,12 @@ func TestSearch(t *testing.T) {
 					"cover_i": 11481354,
 					"number_of_pages_median": 608,
 					"first_publish_year": 1965,
-					"ratings_average": 4.26785
+					"ratings_average": 4.26785,
+					"ebook_access": "borrowable"
 				}, {
 					"key": "/works/OL1W",
-					"title": "Untitled"
+					"title": "Untitled",
+					"ebook_access": "public"
 				}]
 			}`))
 		}))
@@ -111,6 +113,7 @@ func TestSearch(t *testing.T) {
 				So(results.Results[1], ShouldResemble, openlibrary.Result{
 					OpenLibraryID: "OL1W",
 					Title:         "Untitled",
+					Downloadable:  true,
 				})
 			})
 		})
@@ -271,6 +274,59 @@ func TestSearchFilters(t *testing.T) {
 			_, err := client.Search(openlibrary.SearchInput{Query: "le guin", PublishedFrom: 1980, PublishedTo: 1960})
 			Convey("Then it returns ErrInvalidYearRange", func() {
 				So(errors.Is(err, openlibrary.ErrInvalidYearRange), ShouldBeTrue)
+			})
+		})
+	})
+}
+
+func TestPublicScans(t *testing.T) {
+	Convey("Given an Open Library client", t, func() {
+		client := openlibrary.NewClient()
+		Convey("When looking up an id that isn't a work's", func() {
+			_, err := client.PublicScans(`OL1W" OR title:"x`)
+			Convey("Then it returns ErrInvalidWorkID without making a request", func() {
+				So(errors.Is(err, openlibrary.ErrInvalidWorkID), ShouldBeTrue)
+			})
+		})
+	})
+	Convey("Given a fake Open Library server with public and borrowable works", t, func() {
+		var received url.Values
+		server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+			received = request.URL.Query()
+			switch received.Get("q") {
+			case `key:"/works/OL66554W"`:
+				_, _ = responseWriter.Write([]byte(`{"docs": [{"key": "/works/OL66554W", "title": "Pride and Prejudice", "ebook_access": "public", "ia": ["prideprejudice00aust", "prideprejudice0000jane"]}]}`))
+			case `key:"/works/OL893415W"`:
+				_, _ = responseWriter.Write([]byte(`{"docs": [{"key": "/works/OL893415W", "title": "Dune", "ebook_access": "borrowable", "ia": ["dune0000herb"]}]}`))
+			default:
+				_, _ = responseWriter.Write([]byte(`{"docs": []}`))
+			}
+		}))
+		Reset(server.Close)
+		client := openlibrary.NewClientWithBaseURL(server.URL)
+		Convey("When looking up a public domain work", func() {
+			scans, err := client.PublicScans("OL66554W")
+			Convey("Then it asks for the work's scans", func() {
+				So(received.Get("fields"), ShouldContainSubstring, "ia")
+			})
+			Convey("Then it returns the title and every scan", func() {
+				So(err, ShouldBeNil)
+				So(scans, ShouldResemble, openlibrary.Scans{
+					Title:      "Pride and Prejudice",
+					ArchiveIDs: []string{"prideprejudice00aust", "prideprejudice0000jane"},
+				})
+			})
+		})
+		Convey("When looking up a work that can only be borrowed", func() {
+			_, err := client.PublicScans("OL893415W")
+			Convey("Then it returns ErrNotPublicDomain", func() {
+				So(errors.Is(err, openlibrary.ErrNotPublicDomain), ShouldBeTrue)
+			})
+		})
+		Convey("When looking up an unknown work", func() {
+			_, err := client.PublicScans("OL1W")
+			Convey("Then it returns ErrWorkNotFound", func() {
+				So(errors.Is(err, openlibrary.ErrWorkNotFound), ShouldBeTrue)
 			})
 		})
 	})

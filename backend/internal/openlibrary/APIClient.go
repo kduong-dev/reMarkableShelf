@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -22,6 +23,10 @@ const (
 	// PageSize is how many results each page of a search holds.
 	PageSize = 20
 )
+
+// workIDPattern matches a work's Open Library ID, such as OL893415W, so it
+// can be searched for without adding clauses of its own.
+var workIDPattern = regexp.MustCompile(`^OL[0-9]+W$`)
 
 type APIClient struct {
 	httpClient *http.Client
@@ -84,6 +89,28 @@ func (api *APIClient) EditionPageCount(isbn string) (int, error) {
 	return parsed.PageCount, nil
 }
 
+func (api *APIClient) PublicScans(openLibraryID string) (Scans, error) {
+	if !workIDPattern.MatchString(openLibraryID) {
+		return Scans{}, fmt.Errorf("%w %q", ErrInvalidWorkID, openLibraryID)
+	}
+	values := make(url.Values)
+	values.Set("q", fmt.Sprintf("key:%q", "/works/"+openLibraryID))
+	values.Set("fields", "key,title,ebook_access,ia")
+	values.Set("limit", "1")
+	var parsed searchResponse
+	if err := api.getJSON(api.baseURL+"/search.json?"+values.Encode(), nil, &parsed); err != nil {
+		return Scans{}, err
+	}
+	if len(parsed.Docs) == 0 {
+		return Scans{}, fmt.Errorf("%w: %s", ErrWorkNotFound, openLibraryID)
+	}
+	document := parsed.Docs[0]
+	if !document.isPublicDomain() || len(document.ArchiveIDs) == 0 {
+		return Scans{}, fmt.Errorf("%w: %s", ErrNotPublicDomain, openLibraryID)
+	}
+	return Scans{Title: document.Title, ArchiveIDs: document.ArchiveIDs}, nil
+}
+
 func (api *APIClient) createSearchURL(input SearchInput) string {
 	values := make(url.Values)
 	values.Set("q", input.searchQuery())
@@ -94,7 +121,7 @@ func (api *APIClient) createSearchURL(input SearchInput) string {
 	if input.Page > 1 {
 		values.Set("page", fmt.Sprint(input.Page))
 	}
-	values.Set("fields", "key,title,author_name,isbn,cover_i,number_of_pages_median,first_publish_year,ratings_average")
+	values.Set("fields", "key,title,author_name,isbn,cover_i,number_of_pages_median,first_publish_year,ratings_average,ebook_access")
 	return api.baseURL + "/search.json?" + values.Encode()
 }
 

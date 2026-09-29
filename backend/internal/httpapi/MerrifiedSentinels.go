@@ -9,6 +9,7 @@ import (
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/devicestore"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/devicesync"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/documentstore"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/internetarchive"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/openlibrary"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/remarkable"
 )
@@ -40,4 +41,9 @@ var merrifiedSentinels = httpx.MerrifiedSentinels{
 	{Sentinel: openlibrary.ErrInvalidPage, StatusCode: http.StatusBadRequest, UserMessage: "page must be 1 or more"},
 	{Sentinel: openlibrary.ErrInvalidYearRange, StatusCode: http.StatusBadRequest, UserMessage: "the published year range is invalid"},
 	{Sentinel: openlibrary.ErrUpstreamUnavailable, StatusCode: http.StatusBadGateway, UserMessage: "Open Library is unavailable, try again shortly"},
+	{Sentinel: openlibrary.ErrInvalidWorkID, StatusCode: http.StatusBadRequest, UserMessage: "that isn't an Open Library work id"},
+	{Sentinel: openlibrary.ErrWorkNotFound, StatusCode: http.StatusNotFound, UserMessage: "Open Library has no work with that id"},
+	{Sentinel: openlibrary.ErrNotPublicDomain, StatusCode: http.StatusNotFound, UserMessage: "only public domain books can be downloaded"},
+	{Sentinel: internetarchive.ErrNoPublicEbook, StatusCode: http.StatusNotFound, UserMessage: "the Internet Archive has no free EPUB or PDF of that book"},
+	{Sentinel: internetarchive.ErrUpstreamUnavailable, StatusCode: http.StatusBadGateway, UserMessage: "the Internet Archive is unavailable, try again shortly"},
 }

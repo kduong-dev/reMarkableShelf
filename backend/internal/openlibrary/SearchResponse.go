@@ -24,6 +24,18 @@ type workDocument struct {
 	PageCount        int      `json:"number_of_pages_median"`
 	FirstPublishYear int      `json:"first_publish_year"`
 	RatingsAverage   float64  `json:"ratings_average"`
+	EbookAccess      string   `json:"ebook_access"`
+	ArchiveIDs       []string `json:"ia"`
+}
+
+// ebookAccessPublic is the ebook_access of a work with a public-domain scan,
+// as opposed to one that can only be borrowed.
+const ebookAccessPublic = "public"
+
+// isPublicDomain reports whether any of the work's scans is free to download.
+// Search leaves out the scans themselves, as a work can have hundreds.
+func (document workDocument) isPublicDomain() bool {
+	return document.EbookAccess == ebookAccessPublic
 }
 
 // toResult picks the fields the frontend needs out of a work. A work lists
@@ -56,5 +68,6 @@ func (document workDocument) toResult() Result {
 		PageCount:        document.PageCount,
 		FirstPublishYear: document.FirstPublishYear,
 		AverageRating:    math.Round(document.RatingsAverage*10) / 10,
+		Downloadable:     document.isPublicDomain(),
 	}
 }

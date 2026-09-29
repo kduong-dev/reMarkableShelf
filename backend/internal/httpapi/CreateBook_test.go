@@ -17,6 +17,7 @@ import (
 
 type fakeOpenLibrary struct {
 	pageCount   int
+	scans       openlibrary.Scans
 	err         error
 	searchInput *openlibrary.SearchInput
 }
@@ -30,6 +31,10 @@ func (fake fakeOpenLibrary) Search(input openlibrary.SearchInput) (openlibrary.S
 
 func (fake fakeOpenLibrary) EditionPageCount(isbn string) (int, error) {
 	return fake.pageCount, fake.err
+}
+
+func (fake fakeOpenLibrary) PublicScans(openLibraryID string) (openlibrary.Scans, error) {
+	return fake.scans, fake.err
 }
 
 func createBook(t *testing.T, openLibrary openlibrary.API, body string) models.Book {

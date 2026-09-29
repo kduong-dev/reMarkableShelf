@@ -14,4 +14,7 @@ var (
 	ErrUpstreamUnavailable = errors.New("open library is unavailable")
 	ErrEmptyISBN           = errors.New("isbn is required")
 	ErrEditionNotFound     = errors.New("edition not found")
+	ErrInvalidWorkID       = errors.New("invalid open library work id")
+	ErrWorkNotFound        = errors.New("work not found")
+	ErrNotPublicDomain     = errors.New("work is not in the public domain")
 )

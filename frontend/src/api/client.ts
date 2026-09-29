@@ -1,6 +1,6 @@
 import type { Book, BookSearch, BookSearchResults, Device, RemarkableDocument } from './types'
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function send(path: string, init?: RequestInit): Promise<Response> {
   const res = await fetch(`/api${path}`, {
     headers: { 'Content-Type': 'application/json' },
     ...init,
@@ -9,6 +9,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const body = await res.json().catch(() => null)
     throw new Error(body?.message ?? `request to ${path} failed with status ${res.status}`)
   }
+  return res
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await send(path, init)
   if (res.status === 204) return undefined as T
   return res.json() as Promise<T>
 }
@@ -16,6 +21,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 // requestList wraps request for endpoints that return a JSON array, and
 // normalizes a `null` body (Go's encoding/json for a nil/empty slice) to
 // `[]` so callers can always safely .filter/.map the result.
+// fileNameOf reads the file name from a Content-Disposition header, preferring
+// the UTF-8 filename* that non-ASCII names are sent as.
+function fileNameOf(contentDisposition: string | null): string {
+  const encoded = contentDisposition?.match(/filename\*=utf-8''([^;]+)/i)
+  if (encoded) return decodeURIComponent(encoded[1])
+  return contentDisposition?.match(/filename="([^"]+)"/)?.[1] ?? 'book'
+}
+
 async function requestList<T>(path: string, init?: RequestInit): Promise<T[]> {
   return (await request<T[] | null>(path, init)) ?? []
 }
@@ -35,6 +48,12 @@ export const api = {
       if (value !== undefined && value !== '') params.set(key, String(value))
     }
     return request<BookSearchResults>(`/search/books?${params}`, { signal })
+  },
+  // downloadBook fetches a public domain work's ebook, with the file name the
+  // server gives it.
+  downloadBook: async (openLibraryId: string) => {
+    const res = await send(`/search/books/${openLibraryId}/download`)
+    return { file: await res.blob(), fileName: fileNameOf(res.headers.get('Content-Disposition')) }
   },
 
   listDevices: () => requestList<Device>('/devices'),

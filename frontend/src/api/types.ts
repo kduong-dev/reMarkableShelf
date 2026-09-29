@@ -56,6 +56,8 @@ export interface BookSearchResult {
   pageCount?: number
   firstPublishYear?: number
   averageRating?: number
+  // downloadable is true for public domain works with a free ebook scan.
+  downloadable?: boolean
 }
 
 export interface BookSearchResults {

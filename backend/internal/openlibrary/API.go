@@ -9,6 +9,17 @@ type API interface {
 	// EditionPageCount returns the page count of the edition with the given
 	// ISBN, or 0 when Open Library doesn't record one.
 	EditionPageCount(isbn string) (int, error)
+	// PublicScans returns the Internet Archive identifiers of the work's
+	// scans, for a work in the public domain, and ErrNotPublicDomain
+	// otherwise. Some of the identifiers may still only be borrowable.
+	PublicScans(openLibraryID string) (Scans, error)
+}
+
+// Scans is a public-domain work's title and the Internet Archive identifiers
+// of its scans.
+type Scans struct {
+	Title      string
+	ArchiveIDs []string
 }
 
 // SearchResults is one page of a search. Total counts every match, so the
@@ -31,4 +42,7 @@ type Result struct {
 	PageCount        int     `json:"pageCount,omitempty"`
 	FirstPublishYear int     `json:"firstPublishYear,omitempty"`
 	AverageRating    float64 `json:"averageRating,omitempty"`
+	// Downloadable is true when the work is in the public domain, so a free
+	// scan of it can be downloaded.
+	Downloadable bool `json:"downloadable,omitempty"`
 }

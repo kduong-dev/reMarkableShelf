@@ -33,6 +33,7 @@ type fakeTablet struct {
 	copied         []copiedDocument
 	createdFolders []models.RemarkableFolder
 	copyErr        error
+	failTitles     map[string]error
 	restarts       int
 }
 
@@ -63,6 +64,9 @@ func (tablet *fakeTablet) CoverImages(target remarkable.Tablet, requests []remar
 func (tablet *fakeTablet) CopyDocument(target remarkable.Tablet, input remarkable.CopyDocumentInput) error {
 	if tablet.copyErr != nil {
 		return tablet.copyErr
+	}
+	if err, fails := tablet.failTitles[input.Title]; fails {
+		return err
 	}
 	contents, err := io.ReadAll(input.Body)
 	if err != nil {

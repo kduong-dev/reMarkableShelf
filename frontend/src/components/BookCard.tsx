@@ -27,10 +27,17 @@ export function BookCard({ book }: { book: Book }) {
       )}
       <div className="book-card-title">{book.title}</div>
       <div className="book-card-author">{book.author}</div>
-      <span className={`badge badge-${book.status}`}>
-        {statusLabel[book.status]}
-        {percent !== null && book.status === 'reading' && ` · ${percent}%`}
-      </span>
+      <div className="book-card-badges">
+        <span className={`badge badge-${book.status}`}>
+          {statusLabel[book.status]}
+          {percent !== null && book.status === 'reading' && ` · ${percent}%`}
+        </span>
+        {book.tabletDevices && book.tabletDevices.length > 0 && (
+          <span className="badge badge-tablet" title={`On ${book.tabletDevices.join(', ')}`}>
+            On reMarkable
+          </span>
+        )}
+      </div>
     </Link>
   )
 }

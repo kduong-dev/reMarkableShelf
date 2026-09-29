@@ -2,6 +2,7 @@ package bookstore
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -11,12 +12,14 @@ import (
 )
 
 // selectBooks reads every book column plus, from linked tablet documents
-// still on their tablet, the path of a synced cover, which the API serves at
+// still on their tablet, the names of the tablets holding them, the path of a synced cover, which the API serves at
 // /api/devices/{device}/documents/{uuid}/cover, and the tablet's page count.
 const selectBooks = `SELECT id, title, author, isbn, cover_url, status, rating, source, open_library_id, page_count, current_page, progress_updated_at, progress_source, created_at, updated_at,
 	(SELECT '/api/devices/' || device_id || '/documents/' || uuid || '/cover' FROM remarkable_documents
 	 WHERE linked_book_id = books.id AND removed_at IS NULL AND cover_image IS NOT NULL LIMIT 1),
-	(SELECT page_count FROM remarkable_documents WHERE linked_book_id = books.id AND removed_at IS NULL AND page_count IS NOT NULL LIMIT 1)
+	(SELECT page_count FROM remarkable_documents WHERE linked_book_id = books.id AND removed_at IS NULL AND page_count IS NOT NULL LIMIT 1),
+	(SELECT json_group_array(DISTINCT devices.name) FROM remarkable_documents JOIN devices ON devices.id = remarkable_documents.device_id
+	 WHERE linked_book_id = books.id AND removed_at IS NULL)
 	FROM books`
 
 type SQLiteStore struct {
@@ -189,8 +192,12 @@ func validateProgress(book models.Book) error {
 func scanBook(row database.RowScanner) (models.Book, error) {
 	var b models.Book
 	var tabletCoverURL sql.NullString
-	err := row.Scan(&b.ID, &b.Title, &b.Author, &b.ISBN, &b.CoverURL, &b.Status, &b.Rating, &b.Source, &b.OpenLibraryID, &b.PageCount, &b.CurrentPage, &b.ProgressUpdatedAt, &b.ProgressSource, &b.CreatedAt, &b.UpdatedAt, &tabletCoverURL, &b.TabletPageCount)
+	var tabletDevices string
+	err := row.Scan(&b.ID, &b.Title, &b.Author, &b.ISBN, &b.CoverURL, &b.Status, &b.Rating, &b.Source, &b.OpenLibraryID, &b.PageCount, &b.CurrentPage, &b.ProgressUpdatedAt, &b.ProgressSource, &b.CreatedAt, &b.UpdatedAt, &tabletCoverURL, &b.TabletPageCount, &tabletDevices)
 	b.TabletCoverURL = tabletCoverURL.String
+	if err == nil {
+		err = json.Unmarshal([]byte(tabletDevices), &b.TabletDevices)
+	}
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return models.Book{}, err

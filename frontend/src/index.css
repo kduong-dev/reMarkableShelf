@@ -352,6 +352,17 @@ a:hover {
   color: var(--paper);
 }
 
+.book-card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+}
+
+.badge-tablet {
+  background: var(--surface-strong);
+  color: var(--ink);
+}
+
 .badge-remarkable {
   display: inline-block;
   margin: 8px 0;

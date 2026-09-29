@@ -31,6 +31,7 @@ const (
 // bookmark last moved and whether the app or a tablet sync moved it.
 // TabletCoverURL serves the cover of a linked tablet document, if synced,
 // and TabletPageCount is its page count, which a linked book follows.
+// TabletDevices names the tablets holding a document linked to the book.
 type Book struct {
 	ID                string         `json:"id"`
 	Title             string         `json:"title"`
@@ -47,6 +48,7 @@ type Book struct {
 	ProgressSource    ProgressSource `json:"progressSource,omitempty"`
 	TabletCoverURL    string         `json:"tabletCoverUrl,omitempty"`
 	TabletPageCount   *int           `json:"tabletPageCount,omitempty"`
+	TabletDevices     []string       `json:"tabletDevices,omitempty"`
 	CreatedAt         time.Time      `json:"createdAt"`
 	UpdatedAt         time.Time      `json:"updatedAt"`
 }

@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -153,8 +155,8 @@ const DownloadsFolderTitle = "Downloads"
 // downloads folder, returning the folder too if it had to be created. A
 // book already linked to a document on the device is recorded as delivered
 // instead of being copied again. A book that fails to copy is logged and
-// retried on the next sync, as is every book after it, since the tablet
-// has likely gone out of reach.
+// retried on the next sync; the books after it are still copied unless the
+// tablet has gone out of reach.
 func (syncer *Syncer) copyBooks(device models.Device, folders []models.RemarkableFolder) ([]copiedBook, *models.RemarkableFolder, error) {
 	var copied []copiedBook
 	var createdFolder *models.RemarkableFolder
@@ -195,7 +197,10 @@ func (syncer *Syncer) copyBooks(device models.Device, folders []models.Remarkabl
 		documentUUID := uuid.NewString()
 		if err := syncer.copyBook(device, book, file, remarkable.CopyDocumentInput{UUID: documentUUID, ParentUUID: downloadsFolderUUID}); err != nil {
 			logx.Warnf("copying %q to %s (%s): %v", book.Title, device.Name, device.Host, err)
-			return copied, createdFolder, nil
+			if tabletOutOfReach(err) {
+				return copied, createdFolder, nil
+			}
+			continue
 		}
 		err = syncer.bookFileStore.RecordDelivery(bookfilestore.RecordDeliveryInput{
 			BookID: file.BookID, DeviceID: device.ID, DocumentUUID: documentUUID, CopiedAt: now,
@@ -213,6 +218,14 @@ func (syncer *Syncer) copyBooks(device models.Device, folders []models.Remarkabl
 		}})
 	}
 	return copied, createdFolder, nil
+}
+
+// tabletOutOfReach reports whether err means no more can be copied to the
+// tablet this sync.
+func tabletOutOfReach(err error) bool {
+	return errors.Is(err, remarkable.ErrTabletUnreachable) ||
+		errors.Is(err, remarkable.ErrNotPaired) ||
+		errors.Is(err, remarkable.ErrHostKeyChanged)
 }
 
 // errTabletFailed marks a failure to write to the tablet, which ends the
@@ -257,16 +270,30 @@ func inTrash(parents map[string]string, folderUUID string) bool {
 }
 
 // copyBook copies the book's file to the device as described by input,
-// which it completes with the book's title and file.
+// which it completes with the book's title and file. The file is fetched
+// in full before copying starts, since sending it over the tablet's WiFi
+// can outlast the storage service's request timeout.
 func (syncer *Syncer) copyBook(device models.Device, book models.Book, file models.BookFile, input remarkable.CopyDocumentInput) error {
 	_, body, err := syncer.bookFileStore.Open(context.Background(), file.BookID)
 	if err != nil {
 		return err
 	}
 	defer body.Close()
+	fetched, err := os.CreateTemp("", "book-*")
+	if err != nil {
+		return fmt.Errorf("fetching book file: %w", err)
+	}
+	defer os.Remove(fetched.Name())
+	defer fetched.Close()
+	if _, err := io.Copy(fetched, body); err != nil {
+		return fmt.Errorf("fetching book file: %w", err)
+	}
+	if _, err := fetched.Seek(0, io.SeekStart); err != nil {
+		return fmt.Errorf("fetching book file: %w", err)
+	}
 	input.Title = book.Title
 	input.FileType = file.Format
-	input.Body = body
+	input.Body = fetched
 	return syncer.remarkable.CopyDocument(tabletOf(device), input)
 }
 

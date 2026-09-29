@@ -24,6 +24,13 @@ func TestUpsert(t *testing.T) {
 		notes := models.RemarkableDocument{UUID: "notes", Title: "Notes", FileType: models.FileTypeNotebook, LastModified: now}
 		So(documentStore.Upsert(device.ID, []models.RemarkableDocument{dune, notes}), ShouldBeNil)
 		So(documentStore.LinkToBook(device.ID, "dune", book.ID), ShouldBeNil)
+		Convey("When getting the linked book", func() {
+			stored, err := bookStore.Get(book.ID)
+			Convey("Then it names the tablet holding it", func() {
+				So(err, ShouldBeNil)
+				So(stored.TabletDevices, ShouldResemble, []string{"Paper Pro"})
+			})
+		})
 		Convey("When listing them", func() {
 			documents, err := documentStore.ListByDevice(device.ID)
 			Convey("Then each keeps its folder", func() {
@@ -46,10 +53,11 @@ func TestUpsert(t *testing.T) {
 				So(err, ShouldBeNil)
 				So(linked, ShouldBeEmpty)
 			})
-			Convey("Then the book no longer takes its page count or cover", func() {
+			Convey("Then the book no longer takes its page count or cover, or names the tablet", func() {
 				stored, err := bookStore.Get(book.ID)
 				So(err, ShouldBeNil)
 				So(stored.TabletPageCount, ShouldBeNil)
+				So(stored.TabletDevices, ShouldBeEmpty)
 			})
 			Convey("And a later sync finds it again, moved to another folder", func() {
 				dune.ParentUUID = ""

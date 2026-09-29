@@ -11,6 +11,7 @@ import (
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/bookfilestore"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/devicesync"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/models"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/remarkable"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/storetest"
 )
 
@@ -147,6 +148,56 @@ func TestSyncSkipsNotABook(t *testing.T) {
 				So(err, ShouldBeNil)
 				So(documents[0].NotABook, ShouldBeTrue)
 				So(documents[0].LinkedBookID, ShouldBeNil)
+			})
+		})
+	})
+}
+
+func TestSyncCopiesPastAFailedBook(t *testing.T) {
+	Convey("Given three books with files saved on the server", t, func() {
+		stores := storetest.OpenStores(t)
+		device, err := stores.DeviceStore.Create(models.Device{Name: "Paper Pro", Host: "10.0.0.5"})
+		So(err, ShouldBeNil)
+		for _, title := range []string{"Emma", "Persuasion", "Sanditon"} {
+			book, err := stores.BookStore.Create(models.Book{Title: title})
+			So(err, ShouldBeNil)
+			_, err = stores.BookFileStore.Save(context.Background(), bookfilestore.SaveInput{
+				BookID: book.ID, Source: models.BookFileSourceUpload, Body: strings.NewReader("%PDF-1.7 " + title),
+			})
+			So(err, ShouldBeNil)
+		}
+		tablet := &fakeTablet{}
+		syncer := devicesync.NewSyncer(devicesync.NewSyncerInput{
+			BookFileStore: stores.BookFileStore,
+			BookStore:     stores.BookStore,
+			DeviceStore:   stores.DeviceStore,
+			DocumentStore: stores.DocumentStore,
+			Remarkable:    tablet,
+		})
+		Convey("When the first fails to copy", func() {
+			tablet.failTitles = map[string]error{"Emma": errors.New("context deadline exceeded")}
+			_, err := syncer.SyncDevice(device.ID)
+			Convey("Then the others are still copied, and it waits for the next sync", func() {
+				So(err, ShouldBeNil)
+				titles := []string{}
+				for _, copied := range tablet.copied {
+					titles = append(titles, copied.input.Title)
+				}
+				So(titles, ShouldResemble, []string{"Persuasion", "Sanditon"})
+				undelivered, err := stores.BookFileStore.ListUndelivered(device.ID)
+				So(err, ShouldBeNil)
+				So(undelivered, ShouldHaveLength, 1)
+			})
+		})
+		Convey("When the tablet goes out of reach while copying the first", func() {
+			tablet.failTitles = map[string]error{"Emma": remarkable.ErrTabletUnreachable}
+			_, err := syncer.SyncDevice(device.ID)
+			Convey("Then it stops copying, leaving them all for the next sync", func() {
+				So(err, ShouldBeNil)
+				So(tablet.copied, ShouldBeEmpty)
+				undelivered, err := stores.BookFileStore.ListUndelivered(device.ID)
+				So(err, ShouldBeNil)
+				So(undelivered, ShouldHaveLength, 3)
 			})
 		})
 	})

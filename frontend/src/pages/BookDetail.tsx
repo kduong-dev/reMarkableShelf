@@ -112,8 +112,10 @@ export function BookDetail() {
               <p className="book-detail-author">{book.author}</p>
             </>
           )}
-          {book.source === 'remarkable' && (
-            <span className="badge badge-remarkable">Synced from reMarkable</span>
+          {book.tabletDevices && book.tabletDevices.length > 0 ? (
+            <span className="badge badge-remarkable">On your reMarkable: {book.tabletDevices.join(', ')}</span>
+          ) : (
+            book.source === 'remarkable' && <span className="badge badge-remarkable">Synced from reMarkable</span>
           )}
           {!editing && (
             <div className="detail-actions">

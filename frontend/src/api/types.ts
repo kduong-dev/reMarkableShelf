@@ -17,6 +17,8 @@ export interface Book {
   progressSource?: 'app' | 'remarkable'
   tabletCoverUrl?: string
   tabletPageCount?: number
+  // tabletDevices names the tablets holding a copy linked to the book.
+  tabletDevices?: string[]
   createdAt: string
   updatedAt: string
 }

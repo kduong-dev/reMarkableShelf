@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import { bookFromResult } from '../bookFromResult'
-import type { Book, Device, RemarkableDocument } from '../api/types'
+import type { Book, Device, RemarkableDocument, RemarkableFolder } from '../api/types'
 import { documentSearchQuery } from '../bookSearchQuery'
+import { DeviceLibrary } from '../components/DeviceLibrary'
 import { SearchModal } from '../components/SearchModal'
 
 export function Sync() {
   const [devices, setDevices] = useState<Device[]>([])
   const [selected, setSelected] = useState<string>('')
   const [docs, setDocs] = useState<RemarkableDocument[]>([])
+  const [folders, setFolders] = useState<RemarkableFolder[]>([])
   const [books, setBooks] = useState<Book[]>([])
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -32,7 +33,9 @@ export function Sync() {
   }, [])
 
   useEffect(() => {
-    if (selected) api.listDocuments(selected).then(setDocs)
+    if (!selected) return
+    api.listDocuments(selected).then(setDocs)
+    api.listFolders(selected).then(setFolders)
   }, [selected])
 
   async function addDevice(e: React.FormEvent) {
@@ -78,6 +81,7 @@ export function Sync() {
     try {
       const synced = await api.syncDevice(selected)
       setDocs(synced)
+      setFolders(await api.listFolders(selected))
       setDevices((prev) =>
         prev.map((d) => (d.id === selected ? { ...d, lastSyncedAt: new Date().toISOString() } : d)),
       )
@@ -121,6 +125,7 @@ export function Sync() {
       const remaining = devices.filter((d) => d.id !== device.id)
       setDevices(remaining)
       setDocs([])
+      setFolders([])
       setSelected(remaining[0]?.id ?? '')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'failed to remove device')
@@ -139,8 +144,6 @@ export function Sync() {
   }
 
   const selectedDevice = devices.find((d) => d.id === selected)
-  const bookDocs = docs.filter((d) => d.fileType !== 'notebook')
-  const noteDocs = docs.filter((d) => d.fileType === 'notebook')
 
   return (
     <section>
@@ -271,77 +274,17 @@ export function Sync() {
 
       {error && <p className="error">{error}</p>}
 
-      {bookDocs.length > 0 && (
-        <>
-          <h2>Books &amp; documents ({bookDocs.length})</h2>
-          <ul className="doc-list">
-            {bookDocs.map((doc) => (
-              <li key={doc.uuid} className="doc-row">
-                <span className="doc-cover">
-                  {doc.hasCover && (
-                    <img src={`/api/devices/${selected}/documents/${doc.uuid}/cover`} alt="" loading="lazy" />
-                  )}
-                </span>
-                <span className="doc-title">{doc.title}</span>
-                {doc.currentPage && doc.pageCount && (
-                  <span className="doc-position">
-                    p. {doc.currentPage} / {doc.pageCount}
-                  </span>
-                )}
-                <span className={`badge badge-filetype`}>{doc.fileType}</span>
-                {doc.linkedBookId ? (
-                  <span className="linked">
-                    Linked to{' '}
-                    <Link to={`/books/${doc.linkedBookId}`}>
-                      {books.find((b) => b.id === doc.linkedBookId)?.title ?? 'a book'}
-                    </Link>
-                    <button className="text-button" onClick={() => unlink(doc)}>
-                      Unlink
-                    </button>
-                  </span>
-                ) : (
-                  <div className="doc-actions">
-                    <select onChange={(e) => linkToExisting(doc, e.target.value)} defaultValue="">
-                      <option value="" disabled>
-                        Link to existing book…
-                      </option>
-                      {books.map((b) => (
-                        <option key={b.id} value={b.id}>
-                          {b.title}
-                        </option>
-                      ))}
-                    </select>
-                    <button className="primary" onClick={() => setFinding(doc)}>
-                      Find book
-                    </button>
-                    <button className="text-button" onClick={() => addAsNewBook(doc)}>
-                      Add as is
-                    </button>
-                  </div>
-                )}
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-
-      {noteDocs.length > 0 && (
-        <>
-          <h2>Notebooks &amp; sketches ({noteDocs.length})</h2>
-          <ul className="doc-list">
-            {noteDocs.map((doc) => (
-              <li key={doc.uuid} className="doc-row">
-                <span className="doc-cover">
-                  {doc.hasCover && (
-                    <img src={`/api/devices/${selected}/documents/${doc.uuid}/cover`} alt="" loading="lazy" />
-                  )}
-                </span>
-                <span className="doc-title">{doc.title}</span>
-                <span className="badge badge-filetype">notebook</span>
-              </li>
-            ))}
-          </ul>
-        </>
+      {selectedDevice && (
+        <DeviceLibrary
+          deviceId={selected}
+          folders={folders}
+          documents={docs}
+          books={books}
+          onUnlink={unlink}
+          onLink={linkToExisting}
+          onFind={setFinding}
+          onAddAsIs={addAsNewBook}
+        />
       )}
 
       {finding && (

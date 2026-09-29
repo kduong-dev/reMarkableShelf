@@ -10,13 +10,13 @@ import (
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/models"
 )
 
-// selectBooks reads every book column plus, from linked tablet documents,
-// the path of a synced cover, which the API serves at
+// selectBooks reads every book column plus, from linked tablet documents
+// still on their tablet, the path of a synced cover, which the API serves at
 // /api/devices/{device}/documents/{uuid}/cover, and the tablet's page count.
 const selectBooks = `SELECT id, title, author, isbn, cover_url, status, rating, source, open_library_id, page_count, current_page, progress_updated_at, progress_source, created_at, updated_at,
 	(SELECT '/api/devices/' || device_id || '/documents/' || uuid || '/cover' FROM remarkable_documents
-	 WHERE linked_book_id = books.id AND cover_image IS NOT NULL LIMIT 1),
-	(SELECT page_count FROM remarkable_documents WHERE linked_book_id = books.id AND page_count IS NOT NULL LIMIT 1)
+	 WHERE linked_book_id = books.id AND removed_at IS NULL AND cover_image IS NOT NULL LIMIT 1),
+	(SELECT page_count FROM remarkable_documents WHERE linked_book_id = books.id AND removed_at IS NULL AND page_count IS NOT NULL LIMIT 1)
 	FROM books`
 
 type SQLiteStore struct {

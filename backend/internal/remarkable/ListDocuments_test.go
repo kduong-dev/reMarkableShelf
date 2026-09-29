@@ -42,7 +42,8 @@ func TestParseListOutput(t *testing.T) {
 	Convey("Given a formatVersion 1 PDF that has never been opened", t, func() {
 		output := record("086daeda", metadataOpenedAt("0", 0), formatVersion1Content)
 		Convey("When parsing the listing", func() {
-			documents, err := remarkable.ParseListOutput(output)
+			listing, err := remarkable.ParseListOutput(output)
+			documents := listing.Documents
 			Convey("Then it has no reading position", func() {
 				So(err, ShouldBeNil)
 				So(documents, ShouldHaveLength, 1)
@@ -55,7 +56,8 @@ func TestParseListOutput(t *testing.T) {
 	Convey("Given a formatVersion 1 PDF left open on its 42nd page", t, func() {
 		output := record("086daeda", metadataOpenedAt("1759000000000", 41), formatVersion1Content)
 		Convey("When parsing the listing", func() {
-			documents, err := remarkable.ParseListOutput(output)
+			listing, err := remarkable.ParseListOutput(output)
+			documents := listing.Documents
 			Convey("Then its position counts from 1, with the later of last opened and last modified", func() {
 				So(err, ShouldBeNil)
 				So(*documents[0].CurrentPage, ShouldEqual, 42)
@@ -81,7 +83,8 @@ func TestParseListOutput(t *testing.T) {
 			}
 		}`)
 		Convey("When parsing the listing", func() {
-			documents, err := remarkable.ParseListOutput(output)
+			listing, err := remarkable.ParseListOutput(output)
+			documents := listing.Documents
 			Convey("Then the page is its place among the pages that aren't deleted", func() {
 				So(err, ShouldBeNil)
 				So(documents[0].FileType, ShouldEqual, models.FileTypeEPUB)
@@ -108,7 +111,8 @@ func TestParseListOutput(t *testing.T) {
 				"cPages": {"lastOpened": {"value": "page-y"}, "pages": [{"id": "page-x"}, {"id": "page-y"}]}
 			}`)
 		Convey("When parsing the listing", func() {
-			documents, err := remarkable.ParseListOutput(output)
+			listing, err := remarkable.ParseListOutput(output)
+			documents := listing.Documents
 			So(err, ShouldBeNil)
 			coverByUUID := map[string]string{}
 			for _, document := range documents {
@@ -125,15 +129,30 @@ func TestParseListOutput(t *testing.T) {
 			})
 		})
 	})
-	Convey("Given a folder among the documents", t, func() {
-		output := record("folder", `{"type": "CollectionType", "visibleName": "Books"}`, "") +
-			record("086daeda", metadataOpenedAt("0", 0), formatVersion1Content)
+	Convey("Given folders, a document inside one, and items in the trash or deleted", t, func() {
+		output := record("books", `{"type": "CollectionType", "visibleName": "Books", "parent": ""}`, "") +
+			record("classics", `{"type": "CollectionType", "visibleName": "Classics", "parent": "books"}`, "") +
+			record("old", `{"type": "CollectionType", "visibleName": "Old", "parent": "trash"}`, "") +
+			record("086daeda", `{"type": "DocumentType", "visibleName": "Dune.pdf", "parent": "classics"}`, formatVersion1Content) +
+			record("top", `{"type": "DocumentType", "visibleName": "Quick sheets"}`, "") +
+			record("binned", `{"type": "DocumentType", "visibleName": "Draft", "parent": "trash"}`, "") +
+			record("gone", `{"type": "DocumentType", "visibleName": "Gone", "deleted": true}`, "")
 		Convey("When parsing the listing", func() {
-			documents, err := remarkable.ParseListOutput(output)
-			Convey("Then only the document is returned", func() {
-				So(err, ShouldBeNil)
-				So(documents, ShouldHaveLength, 1)
-				So(documents[0].UUID, ShouldEqual, "086daeda")
+			listing, err := remarkable.ParseListOutput(output)
+			So(err, ShouldBeNil)
+			Convey("Then every folder is returned inside its parent, including trashed ones", func() {
+				So(listing.Folders, ShouldResemble, []models.RemarkableFolder{
+					{UUID: "books", Title: "Books"},
+					{UUID: "classics", Title: "Classics", ParentUUID: "books"},
+					{UUID: "old", Title: "Old", ParentUUID: models.TrashFolderUUID},
+				})
+			})
+			Convey("Then each document keeps its folder, and deleted ones are left out", func() {
+				parents := map[string]string{}
+				for _, document := range listing.Documents {
+					parents[document.UUID] = document.ParentUUID
+				}
+				So(parents, ShouldResemble, map[string]string{"086daeda": "classics", "top": "", "binned": models.TrashFolderUUID})
 			})
 		})
 	})

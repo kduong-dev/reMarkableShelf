@@ -722,6 +722,92 @@ a:hover {
   gap: 8px;
 }
 
+.library-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 24px 0 8px;
+}
+
+.breadcrumbs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+  min-width: 0;
+  color: var(--text-muted);
+}
+
+.breadcrumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.breadcrumbs .text-button {
+  padding: 4px 0;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+.breadcrumbs .text-button[aria-current='true'] {
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.folder-row {
+  padding: 0;
+}
+
+.folder-open,
+.folder-open:hover {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font-weight: normal;
+  text-align: left;
+}
+
+.folder-open:hover .doc-title {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.folder-icon {
+  position: relative;
+  width: 32px;
+  height: 26px;
+  flex-shrink: 0;
+  margin: 8px 0 9px;
+  background: var(--surface-strong);
+  border-radius: var(--radius);
+}
+
+.folder-icon::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: 0;
+  width: 13px;
+  height: 5px;
+  background: var(--surface-strong);
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+.folder-icon-trash {
+  opacity: 0.6;
+}
+
 .doc-cover {
   width: 32px;
   height: 43px;

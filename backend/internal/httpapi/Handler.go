@@ -55,6 +55,7 @@ func NewHandler(input NewHandlerInput) http.Handler {
 	apiRouter.HandleFunc("/devices/{id}/pair", api.PairDevice).Methods(http.MethodPost)
 	apiRouter.HandleFunc("/devices/{id}/sync", api.SyncDevice).Methods(http.MethodPost)
 	apiRouter.HandleFunc("/devices/{id}/documents", api.ListDocuments).Methods(http.MethodGet)
+	apiRouter.HandleFunc("/devices/{id}/folders", api.ListFolders).Methods(http.MethodGet)
 	apiRouter.HandleFunc("/devices/{id}/documents/{uuid}/cover", api.GetDocumentCover).Methods(http.MethodGet)
 	apiRouter.HandleFunc("/devices/{id}/documents/{uuid}/link", api.LinkDocument).Methods(http.MethodPost)
 	apiRouter.HandleFunc("/devices/{id}/documents/{uuid}/link", api.UnlinkDocument).Methods(http.MethodDelete)

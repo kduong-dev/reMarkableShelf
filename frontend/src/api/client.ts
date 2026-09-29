@@ -1,4 +1,12 @@
-import type { Book, BookFile, BookSearch, BookSearchResults, Device, RemarkableDocument } from './types'
+import type {
+  Book,
+  BookFile,
+  BookSearch,
+  BookSearchResults,
+  Device,
+  RemarkableDocument,
+  RemarkableFolder,
+} from './types'
 
 // ApiError is a failed request, with its status so callers can tell a
 // missing resource from a failure.
@@ -102,6 +110,7 @@ export const api = {
     }),
   syncDevice: (id: string) => requestList<RemarkableDocument>(`/devices/${id}/sync`, { method: 'POST' }),
   listDocuments: (deviceId: string) => requestList<RemarkableDocument>(`/devices/${deviceId}/documents`),
+  listFolders: (deviceId: string) => requestList<RemarkableFolder>(`/devices/${deviceId}/folders`),
   unlinkDocument: (deviceId: string, uuid: string) =>
     request<void>(`/devices/${deviceId}/documents/${uuid}/link`, { method: 'DELETE' }),
   linkDocument: (deviceId: string, uuid: string, bookId: string) =>

@@ -45,6 +45,15 @@ export interface RemarkableDocument {
   bookTitle?: string
   bookAuthor?: string
   hasCover?: boolean
+  // parentUuid is the folder holding the document on the tablet: unset at
+  // the top of its library, "trash" in its trash.
+  parentUuid?: string
+}
+
+export interface RemarkableFolder {
+  uuid: string
+  title: string
+  parentUuid?: string
 }
 
 export interface BookSearchResult {

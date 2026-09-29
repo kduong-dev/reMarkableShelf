@@ -45,14 +45,17 @@ func (client *SSHClient) ListDocuments(tablet Tablet) (Listing, error) {
 	if err != nil {
 		return Listing{}, fmt.Errorf("listing the tablet's documents: %w", err)
 	}
-	documents, err := ParseListOutput(output)
-	return Listing{Documents: documents, HostKey: hostKey}, err
+	listing, err := ParseListOutput(output)
+	listing.HostKey = hostKey
+	return listing, err
 }
 
-// ParseListOutput parses what listScript prints into documents, skipping
-// folders and records it can't parse.
-func ParseListOutput(output string) ([]models.RemarkableDocument, error) {
+// ParseListOutput parses what listScript prints into documents and
+// folders, skipping records it can't parse and ones the tablet has marked
+// deleted, which it keeps only until they're gone from its cloud.
+func ParseListOutput(output string) (Listing, error) {
 	var docs []models.RemarkableDocument
+	var folders []models.RemarkableFolder
 
 	for _, record := range strings.Split(output, sepRecordStart) {
 		if record == "" {
@@ -75,8 +78,15 @@ func ParseListOutput(output string) ([]models.RemarkableDocument, error) {
 		if err != nil {
 			continue // skip unparseable/partial records rather than failing the whole sync
 		}
+		if meta.Deleted {
+			continue
+		}
+		if meta.Type == "CollectionType" {
+			folders = append(folders, models.RemarkableFolder{UUID: uuid, Title: titleOf(meta, uuid), ParentUUID: meta.Parent})
+			continue
+		}
 		if meta.Type != "DocumentType" {
-			continue // folders (CollectionType) aren't documents
+			continue
 		}
 
 		c, _ := parseContent([]byte(metaAndContent[1]))
@@ -86,14 +96,10 @@ func ParseListOutput(output string) ([]models.RemarkableDocument, error) {
 			lastModified = time.Now().UTC()
 		}
 
-		title := meta.VisibleName
-		if title == "" {
-			title = uuid
-		}
-
 		document := models.RemarkableDocument{
 			UUID:         uuid,
-			Title:        title,
+			Title:        titleOf(meta, uuid),
+			ParentUUID:   meta.Parent,
 			FileType:     Classify(c.FileType),
 			LastModified: lastModified,
 			BookTitle:    strings.TrimSpace(c.DocumentMetadata.Title),
@@ -110,5 +116,13 @@ func ParseListOutput(output string) ([]models.RemarkableDocument, error) {
 		docs = append(docs, document)
 	}
 
-	return docs, nil
+	return Listing{Documents: docs, Folders: folders}, nil
+}
+
+// titleOf is the name the tablet shows for an item, or its UUID if unnamed.
+func titleOf(meta metadata, uuid string) string {
+	if meta.VisibleName == "" {
+		return uuid
+	}
+	return meta.VisibleName
 }

@@ -48,7 +48,7 @@ func NewSyncer(input NewSyncerInput) *Syncer {
 	}
 }
 
-// SyncDevice reads every document on the device, upserts them, auto-links
+// SyncDevice reads every document and folder on the device, upserts them, auto-links
 // pdf/epub documents to an existing book by exact (case-insensitive) title
 // match, copies book files to it for books with no document there, then
 // moves linked books' bookmarks to newer tablet positions. Notebooks are stored but never auto-linked — see
@@ -95,6 +95,9 @@ func (syncer *Syncer) syncDevice(deviceID string, restartApp bool) ([]models.Rem
 	}
 	documents := listing.Documents
 	if err := syncer.documentStore.Upsert(device.ID, documents); err != nil {
+		return nil, err
+	}
+	if err := syncer.documentStore.ReplaceFolders(device.ID, listing.Folders); err != nil {
 		return nil, err
 	}
 	if err := syncer.deviceStore.TouchSyncedAt(device.ID, time.Now().UTC()); err != nil {

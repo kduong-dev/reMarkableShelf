@@ -49,6 +49,16 @@ CREATE TABLE IF NOT EXISTS remarkable_documents (
 	auto_link_dismissed INTEGER NOT NULL DEFAULT 0,
 	cover_image     BLOB,
 	cover_checked_at DATETIME,
+	parent_uuid     TEXT NOT NULL DEFAULT '',
+	removed_at      DATETIME,
+	PRIMARY KEY (uuid, device_id)
+);
+
+CREATE TABLE IF NOT EXISTS remarkable_folders (
+	uuid            TEXT NOT NULL,
+	device_id       TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+	title           TEXT NOT NULL,
+	parent_uuid     TEXT NOT NULL DEFAULT '',
 	PRIMARY KEY (uuid, device_id)
 );
 
@@ -95,6 +105,8 @@ var addedColumns = []struct {
 	{"remarkable_documents", "cover_checked_at", "DATETIME"},
 	{"devices", "host_key", "TEXT NOT NULL DEFAULT ''"},
 	{"devices", "identity_changed", "INTEGER NOT NULL DEFAULT 0"},
+	{"remarkable_documents", "parent_uuid", "TEXT NOT NULL DEFAULT ''"},
+	{"remarkable_documents", "removed_at", "DATETIME"},
 }
 
 func migrate(database *sql.DB) error {

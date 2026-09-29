@@ -19,6 +19,8 @@ type metadata struct {
 	LastModified   string `json:"lastModified"`
 	LastOpened     string `json:"lastOpened"`
 	LastOpenedPage *int   `json:"lastOpenedPage"`
+	Parent         string `json:"parent"`
+	Deleted        bool   `json:"deleted"`
 }
 
 // content mirrors the fields we need from a <uuid>.content file. fileType

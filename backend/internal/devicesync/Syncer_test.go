@@ -26,6 +26,7 @@ type fakeTablet struct {
 	covers        map[string][]byte
 	coverRequests []remarkable.CoverRequest
 	documents     []models.RemarkableDocument
+	folders       []models.RemarkableFolder
 	listErr       error
 	pairErr       error
 	pairedWith    string
@@ -44,7 +45,7 @@ func (tablet *fakeTablet) ListDocuments(target remarkable.Tablet) (remarkable.Li
 	if tablet.listErr != nil {
 		return remarkable.Listing{}, tablet.listErr
 	}
-	return remarkable.Listing{Documents: tablet.documents, HostKey: tablet.hostKey}, nil
+	return remarkable.Listing{Documents: tablet.documents, Folders: tablet.folders, HostKey: tablet.hostKey}, nil
 }
 
 func (tablet *fakeTablet) CoverImages(target remarkable.Tablet, requests []remarkable.CoverRequest) (map[string][]byte, error) {
@@ -603,6 +604,43 @@ func TestSyncCopiesBooks(t *testing.T) {
 				undelivered, err := stores.BookFileStore.ListUndelivered(device.ID)
 				So(err, ShouldBeNil)
 				So(undelivered, ShouldHaveLength, 1)
+			})
+		})
+	})
+}
+
+func TestSyncMirrorsFolders(t *testing.T) {
+	Convey("Given a tablet with a document in a folder", t, func() {
+		stores := storetest.OpenStores(t)
+		device, err := stores.DeviceStore.Create(models.Device{Name: "Paper Pro", Host: "10.0.0.5"})
+		So(err, ShouldBeNil)
+		tablet := &fakeTablet{
+			folders:   []models.RemarkableFolder{{UUID: "books", Title: "Books"}},
+			documents: []models.RemarkableDocument{{UUID: "dune", Title: "Dune", FileType: models.FileTypeEPUB, ParentUUID: "books"}},
+		}
+		syncer := devicesync.NewSyncer(devicesync.NewSyncerInput{
+			BookFileStore: stores.BookFileStore,
+			BookStore:     stores.BookStore,
+			DeviceStore:   stores.DeviceStore,
+			DocumentStore: stores.DocumentStore,
+			Remarkable:    tablet,
+		})
+		Convey("When syncing", func() {
+			documents, err := syncer.SyncDevice(device.ID)
+			So(err, ShouldBeNil)
+			Convey("Then the folder and the document's place in it are stored", func() {
+				folders, err := stores.DocumentStore.ListFolders(device.ID)
+				So(err, ShouldBeNil)
+				So(folders, ShouldResemble, tablet.folders)
+				So(documents[0].ParentUUID, ShouldEqual, "books")
+			})
+			Convey("And the document is deleted on the tablet before the next sync", func() {
+				tablet.documents = nil
+				documents, err := syncer.SyncDevice(device.ID)
+				Convey("Then it's gone from the synced documents", func() {
+					So(err, ShouldBeNil)
+					So(documents, ShouldBeEmpty)
+				})
 			})
 		})
 	})

@@ -26,9 +26,11 @@ type Tablet struct {
 	HostKey string
 }
 
-// Listing is a tablet's documents and the host key it presented.
+// Listing is a tablet's documents and folders, and the host key it
+// presented.
 type Listing struct {
 	Documents []models.RemarkableDocument
+	Folders   []models.RemarkableFolder
 	HostKey   string
 }
 

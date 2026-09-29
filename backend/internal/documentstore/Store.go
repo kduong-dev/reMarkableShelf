@@ -10,11 +10,19 @@ import (
 // they're linked to.
 type Store interface {
 	// Upsert replaces the known document set for a device with the
-	// freshly-synced list, preserving any existing link to a book.
+	// freshly-synced list, preserving any existing link to a book. A
+	// document missing from the list is marked removed rather than deleted,
+	// so it keeps its link should it reappear, as it would had one sync
+	// failed to read it.
 	Upsert(deviceID string, documents []models.RemarkableDocument) error
+	// ListByDevice lists the documents on a device, leaving out removed ones,
+	// as do the other lists.
 	ListByDevice(deviceID string) ([]models.RemarkableDocument, error)
 	// ListByBook lists the tablet documents linked to a book.
 	ListByBook(bookID string) ([]models.RemarkableDocument, error)
+	// ReplaceFolders replaces a device's folders with the freshly-synced ones.
+	ReplaceFolders(deviceID string, folders []models.RemarkableFolder) error
+	ListFolders(deviceID string) ([]models.RemarkableFolder, error)
 	LinkToBook(deviceID, documentUUID, bookID string) error
 	// Unlink detaches a document from its book and stops sync linking it
 	// again by title.

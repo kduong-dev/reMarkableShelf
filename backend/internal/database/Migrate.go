@@ -31,7 +31,8 @@ CREATE TABLE IF NOT EXISTS devices (
 	last_synced_at  DATETIME,
 	paired_at       DATETIME,
 	host_key        TEXT NOT NULL DEFAULT '',
-	identity_changed INTEGER NOT NULL DEFAULT 0
+	identity_changed INTEGER NOT NULL DEFAULT 0,
+	downloads_folder_uuid TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS remarkable_documents (
@@ -107,6 +108,7 @@ var addedColumns = []struct {
 	{"devices", "identity_changed", "INTEGER NOT NULL DEFAULT 0"},
 	{"remarkable_documents", "parent_uuid", "TEXT NOT NULL DEFAULT ''"},
 	{"remarkable_documents", "removed_at", "DATETIME"},
+	{"devices", "downloads_folder_uuid", "TEXT NOT NULL DEFAULT ''"},
 }
 
 func migrate(database *sql.DB) error {

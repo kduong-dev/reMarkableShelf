@@ -21,18 +21,19 @@ import (
 // presenting hostKey, failing with listErr or pairErr when set, and records
 // cover requests and the tablet it was last asked to reach.
 type fakeTablet struct {
-	hostKey       string
-	lastTarget    remarkable.Tablet
-	covers        map[string][]byte
-	coverRequests []remarkable.CoverRequest
-	documents     []models.RemarkableDocument
-	folders       []models.RemarkableFolder
-	listErr       error
-	pairErr       error
-	pairedWith    string
-	copied        []copiedDocument
-	copyErr       error
-	restarts      int
+	hostKey        string
+	lastTarget     remarkable.Tablet
+	covers         map[string][]byte
+	coverRequests  []remarkable.CoverRequest
+	documents      []models.RemarkableDocument
+	folders        []models.RemarkableFolder
+	listErr        error
+	pairErr        error
+	pairedWith     string
+	copied         []copiedDocument
+	createdFolders []models.RemarkableFolder
+	copyErr        error
+	restarts       int
 }
 
 type copiedDocument struct {
@@ -70,6 +71,15 @@ func (tablet *fakeTablet) CopyDocument(target remarkable.Tablet, input remarkabl
 	tablet.copied = append(tablet.copied, copiedDocument{input: input, contents: string(contents)})
 	// The copy lands in the documents directory, so the next listing finds it.
 	tablet.documents = append(tablet.documents, models.RemarkableDocument{UUID: input.UUID, Title: input.Title, FileType: input.FileType, LastModified: time.Now().UTC()})
+	return nil
+}
+
+func (tablet *fakeTablet) CreateFolder(target remarkable.Tablet, folder models.RemarkableFolder) error {
+	if tablet.copyErr != nil {
+		return tablet.copyErr
+	}
+	tablet.createdFolders = append(tablet.createdFolders, folder)
+	tablet.folders = append(tablet.folders, folder)
 	return nil
 }
 

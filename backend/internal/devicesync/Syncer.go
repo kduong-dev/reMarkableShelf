@@ -3,6 +3,7 @@ package devicesync
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"sync"
@@ -106,9 +107,14 @@ func (syncer *Syncer) syncDevice(deviceID string, restartApp bool) ([]models.Rem
 	if err := syncer.autoLinkDocuments(device.ID); err != nil {
 		return nil, err
 	}
-	copied, err := syncer.copyBooks(device)
+	copied, createdFolder, err := syncer.copyBooks(device, listing.Folders)
 	if err != nil {
 		return nil, err
+	}
+	if createdFolder != nil {
+		if err := syncer.documentStore.ReplaceFolders(device.ID, append(slices.Clone(listing.Folders), *createdFolder)); err != nil {
+			return nil, err
+		}
 	}
 	if len(copied) > 0 {
 		if documents, err = syncer.addCopiedDocuments(device.ID, documents, copied); err != nil {
@@ -139,21 +145,28 @@ type copiedBook struct {
 	document models.RemarkableDocument
 }
 
-// copyBooks copies each book file not yet delivered to the device. A book
-// already linked to a document on the device is recorded as delivered
+// DownloadsFolderTitle names the tablet folder books saved on the server are
+// copied into.
+const DownloadsFolderTitle = "Downloads"
+
+// copyBooks copies each book file not yet delivered to the device into its
+// downloads folder, returning the folder too if it had to be created. A
+// book already linked to a document on the device is recorded as delivered
 // instead of being copied again. A book that fails to copy is logged and
 // retried on the next sync, as is every book after it, since the tablet
 // has likely gone out of reach.
-func (syncer *Syncer) copyBooks(device models.Device) ([]copiedBook, error) {
+func (syncer *Syncer) copyBooks(device models.Device, folders []models.RemarkableFolder) ([]copiedBook, *models.RemarkableFolder, error) {
 	var copied []copiedBook
+	var createdFolder *models.RemarkableFolder
+	downloadsFolderUUID := ""
 	files, err := syncer.bookFileStore.ListUndelivered(device.ID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	for _, file := range files {
 		linked, err := syncer.linkedDocument(device.ID, file.BookID)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		now := time.Now().UTC()
 		if linked != nil {
@@ -161,24 +174,34 @@ func (syncer *Syncer) copyBooks(device models.Device) ([]copiedBook, error) {
 				BookID: file.BookID, DeviceID: device.ID, DocumentUUID: linked.UUID, CopiedAt: now, LoadedAt: &now,
 			})
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			continue
 		}
 		book, err := syncer.bookStore.Get(file.BookID)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
+		}
+		if downloadsFolderUUID == "" {
+			downloadsFolderUUID, createdFolder, err = syncer.downloadsFolder(device, folders)
+			if errors.Is(err, errTabletFailed) {
+				logx.Warnf("creating the %s folder on %s (%s): %v", DownloadsFolderTitle, device.Name, device.Host, err)
+				return copied, nil, nil
+			}
+			if err != nil {
+				return nil, nil, err
+			}
 		}
 		documentUUID := uuid.NewString()
-		if err := syncer.copyBook(device, book, file, documentUUID); err != nil {
+		if err := syncer.copyBook(device, book, file, remarkable.CopyDocumentInput{UUID: documentUUID, ParentUUID: downloadsFolderUUID}); err != nil {
 			logx.Warnf("copying %q to %s (%s): %v", book.Title, device.Name, device.Host, err)
-			return copied, nil
+			return copied, createdFolder, nil
 		}
 		err = syncer.bookFileStore.RecordDelivery(bookfilestore.RecordDeliveryInput{
 			BookID: file.BookID, DeviceID: device.ID, DocumentUUID: documentUUID, CopiedAt: now,
 		})
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		copied = append(copied, copiedBook{book: book, document: models.RemarkableDocument{
 			UUID:         documentUUID,
@@ -186,23 +209,65 @@ func (syncer *Syncer) copyBooks(device models.Device) ([]copiedBook, error) {
 			Title:        book.Title,
 			FileType:     file.Format,
 			LastModified: now,
+			ParentUUID:   downloadsFolderUUID,
 		}})
 	}
-	return copied, nil
+	return copied, createdFolder, nil
 }
 
-func (syncer *Syncer) copyBook(device models.Device, book models.Book, file models.BookFile, documentUUID string) error {
+// errTabletFailed marks a failure to write to the tablet, which ends the
+// copying rather than the sync.
+var errTabletFailed = errors.New("writing to the tablet failed")
+
+// downloadsFolder returns the UUID of the device's downloads folder. It's
+// the folder recorded for the device while that's still on the tablet and
+// out of its trash, wherever it's been moved or whatever it's been renamed
+// to; otherwise a top-level folder already named Downloads; otherwise a new
+// one, which is also returned.
+func (syncer *Syncer) downloadsFolder(device models.Device, folders []models.RemarkableFolder) (string, *models.RemarkableFolder, error) {
+	parents := make(map[string]string, len(folders))
+	for _, folder := range folders {
+		parents[folder.UUID] = folder.ParentUUID
+	}
+	if _, onTablet := parents[device.DownloadsFolderUUID]; onTablet && !inTrash(parents, device.DownloadsFolderUUID) {
+		return device.DownloadsFolderUUID, nil, nil
+	}
+	for _, folder := range folders {
+		if folder.ParentUUID == "" && strings.EqualFold(folder.Title, DownloadsFolderTitle) {
+			return folder.UUID, nil, syncer.deviceStore.SetDownloadsFolder(device.ID, folder.UUID)
+		}
+	}
+	created := models.RemarkableFolder{UUID: uuid.NewString(), Title: DownloadsFolderTitle}
+	if err := syncer.remarkable.CreateFolder(tabletOf(device), created); err != nil {
+		return "", nil, fmt.Errorf("%w: %w", errTabletFailed, err)
+	}
+	return created.UUID, &created, syncer.deviceStore.SetDownloadsFolder(device.ID, created.UUID)
+}
+
+// inTrash reports whether the folder, or any folder holding it, is in the
+// trash, given each folder's parent.
+func inTrash(parents map[string]string, folderUUID string) bool {
+	for seen := 0; folderUUID != "" && seen <= len(parents); seen++ {
+		if folderUUID == models.TrashFolderUUID {
+			return true
+		}
+		folderUUID = parents[folderUUID]
+	}
+	return false
+}
+
+// copyBook copies the book's file to the device as described by input,
+// which it completes with the book's title and file.
+func (syncer *Syncer) copyBook(device models.Device, book models.Book, file models.BookFile, input remarkable.CopyDocumentInput) error {
 	_, body, err := syncer.bookFileStore.Open(context.Background(), file.BookID)
 	if err != nil {
 		return err
 	}
 	defer body.Close()
-	return syncer.remarkable.CopyDocument(tabletOf(device), remarkable.CopyDocumentInput{
-		UUID:     documentUUID,
-		Title:    book.Title,
-		FileType: file.Format,
-		Body:     body,
-	})
+	input.Title = book.Title
+	input.FileType = file.Format
+	input.Body = body
+	return syncer.remarkable.CopyDocument(tabletOf(device), input)
 }
 
 // addCopiedDocuments adds the documents just copied to the device's

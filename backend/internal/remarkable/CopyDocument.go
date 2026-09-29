@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/kduong-dev/goutil/fatal"
@@ -13,7 +14,8 @@ import (
 )
 
 // newMetadata is the <uuid>.metadata of a document the tablet has never
-// opened, in the root of its library.
+// opened, or of a folder, inside the folder Parent ("" for the top of the
+// library).
 type newMetadata struct {
 	Deleted          bool   `json:"deleted"`
 	LastModified     string `json:"lastModified"`
@@ -71,20 +73,54 @@ func (client *SSHClient) CopyDocument(tablet Tablet, input CopyDocumentInput) er
 	metadata := fatal.UnlessMarshal(newMetadata{
 		LastModified: now,
 		LastOpened:   "0",
+		Parent:       input.ParentUUID,
 		Type:         "DocumentType",
 		VisibleName:  input.Title,
 	})
-	files := []struct {
-		extension string
-		body      io.Reader
-	}{
+	return client.writeItem(connection, input.UUID, []itemFile{
 		{string(input.FileType), input.Body},
 		{"content", bytes.NewReader(content)},
 		{"metadata", bytes.NewReader(metadata)},
+	})
+}
+
+// CreateFolder writes the folder's .content, then its .metadata, which
+// makes it exist.
+func (client *SSHClient) CreateFolder(tablet Tablet, folder models.RemarkableFolder) error {
+	if !idPattern.MatchString(folder.UUID) {
+		return fmt.Errorf("%w: uuid %q", ErrInvalidDocument, folder.UUID)
 	}
+	connection, _, err := client.dialKey(tablet)
+	if err != nil {
+		return err
+	}
+	defer connection.Close()
+	metadata := fatal.UnlessMarshal(newMetadata{
+		LastModified: strconv.FormatInt(time.Now().UnixMilli(), 10),
+		LastOpened:   "0",
+		Parent:       folder.ParentUUID,
+		Type:         "CollectionType",
+		VisibleName:  folder.Title,
+	})
+	return client.writeItem(connection, folder.UUID, []itemFile{
+		{"content", strings.NewReader(`{"tags":[]}`)},
+		{"metadata", bytes.NewReader(metadata)},
+	})
+}
+
+// itemFile is one of the files making up a document or folder, named
+// <uuid>.<extension>.
+type itemFile struct {
+	extension string
+	body      io.Reader
+}
+
+// writeItem writes an item's files in order, so its .metadata, written
+// last, only appears once the rest are in place.
+func (client *SSHClient) writeItem(connection *ssh.Client, uuid string, files []itemFile) error {
 	for _, file := range files {
-		if err := client.writeFile(connection, input.UUID+"."+file.extension, file.body); err != nil {
-			return fmt.Errorf("copying %s.%s to the tablet: %w", input.UUID, file.extension, err)
+		if err := client.writeFile(connection, uuid+"."+file.extension, file.body); err != nil {
+			return fmt.Errorf("copying %s.%s to the tablet: %w", uuid, file.extension, err)
 		}
 	}
 	return nil

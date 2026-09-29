@@ -11,6 +11,8 @@ import (
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/models"
 )
 
+const deviceColumns = `id, name, host, last_synced_at, paired_at, host_key, identity_changed, downloads_folder_uuid`
+
 type SQLiteStore struct {
 	database *sql.DB
 }
@@ -20,7 +22,7 @@ func NewSQLiteStore(database *sql.DB) *SQLiteStore {
 }
 
 func (deviceStore *SQLiteStore) List() ([]models.Device, error) {
-	rows, err := deviceStore.database.Query(`SELECT id, name, host, last_synced_at, paired_at, host_key, identity_changed FROM devices ORDER BY name`)
+	rows, err := deviceStore.database.Query(`SELECT ` + deviceColumns + ` FROM devices ORDER BY name`)
 	if err != nil {
 		return nil, err
 	}
@@ -38,7 +40,7 @@ func (deviceStore *SQLiteStore) List() ([]models.Device, error) {
 }
 
 func (deviceStore *SQLiteStore) Get(id string) (models.Device, error) {
-	row := deviceStore.database.QueryRow(`SELECT id, name, host, last_synced_at, paired_at, host_key, identity_changed FROM devices WHERE id = ?`, id)
+	row := deviceStore.database.QueryRow(`SELECT `+deviceColumns+` FROM devices WHERE id = ?`, id)
 	d, err := scanDevice(row)
 	if err == sql.ErrNoRows {
 		return models.Device{}, fmt.Errorf("device %q: %w", id, ErrDeviceNotFound)
@@ -77,6 +79,11 @@ func (deviceStore *SQLiteStore) SetHostKey(id, hostKey string) error {
 	return err
 }
 
+func (deviceStore *SQLiteStore) SetDownloadsFolder(id, folderUUID string) error {
+	_, err := deviceStore.database.Exec(`UPDATE devices SET downloads_folder_uuid = ? WHERE id = ?`, folderUUID, id)
+	return err
+}
+
 func (deviceStore *SQLiteStore) MarkIdentityChanged(id string) error {
 	_, err := deviceStore.database.Exec(`UPDATE devices SET paired_at = NULL, identity_changed = 1 WHERE id = ?`, id)
 	return err
@@ -110,7 +117,7 @@ func (deviceStore *SQLiteStore) Delete(id string) error {
 
 func scanDevice(row database.RowScanner) (models.Device, error) {
 	var d models.Device
-	err := row.Scan(&d.ID, &d.Name, &d.Host, &d.LastSyncedAt, &d.PairedAt, &d.HostKey, &d.IdentityChanged)
+	err := row.Scan(&d.ID, &d.Name, &d.Host, &d.LastSyncedAt, &d.PairedAt, &d.HostKey, &d.IdentityChanged, &d.DownloadsFolderUUID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return models.Device{}, err

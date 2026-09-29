@@ -14,4 +14,7 @@ type Device struct {
 	// IdentityChanged.
 	HostKey         string `json:"-"`
 	IdentityChanged bool   `json:"identityChanged,omitempty"`
+	// DownloadsFolderUUID is the tablet folder books saved on the server are
+	// copied into, "" until sync first creates or finds it.
+	DownloadsFolderUUID string `json:"downloadsFolderUuid,omitempty"`
 }

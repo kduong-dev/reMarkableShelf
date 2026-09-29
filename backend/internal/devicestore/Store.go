@@ -22,6 +22,9 @@ type Store interface {
 	// SetHostKey records the host key of a device paired before host keys
 	// were recorded.
 	SetHostKey(id, hostKey string) error
+	// SetDownloadsFolder records the tablet folder books saved on the server
+	// are copied into.
+	SetDownloadsFolder(id, folderUUID string) error
 	// MarkIdentityChanged unpairs a device whose tablet presented a host key
 	// other than the recorded one, so it isn't synced until re-paired.
 	MarkIdentityChanged(id string) error

@@ -85,6 +85,39 @@ func TestCopyDocument(t *testing.T) {
 	})
 }
 
+func TestCreateFolder(t *testing.T) {
+	Convey("Given a paired tablet", t, func() {
+		_, client, target, documentsDir := pairedTablet(t)
+		Convey("When creating a folder and copying a PDF into it", func() {
+			So(client.CreateFolder(target, models.RemarkableFolder{UUID: "5d1e0c3a-d00d", Title: "Downloads"}), ShouldBeNil)
+			So(client.CopyDocument(target, remarkable.CopyDocumentInput{
+				UUID:       "9f2b7e41-e44a",
+				Title:      "Emma",
+				ParentUUID: "5d1e0c3a-d00d",
+				FileType:   models.FileTypePDF,
+				Body:       strings.NewReader("%PDF-1.7"),
+			}), ShouldBeNil)
+			Convey("Then the folder is a collection with no file of its own", func() {
+				raw, err := os.ReadFile(filepath.Join(documentsDir, "5d1e0c3a-d00d.metadata"))
+				So(err, ShouldBeNil)
+				var metadata map[string]any
+				So(json.Unmarshal(raw, &metadata), ShouldBeNil)
+				So(metadata["type"], ShouldEqual, "CollectionType")
+				So(metadata["visibleName"], ShouldEqual, "Downloads")
+				_, err = os.Stat(filepath.Join(documentsDir, "5d1e0c3a-d00d.content"))
+				So(err, ShouldBeNil)
+			})
+			Convey("Then listing the tablet finds the folder with the PDF inside", func() {
+				listing, err := client.ListDocuments(target)
+				So(err, ShouldBeNil)
+				So(listing.Folders, ShouldResemble, []models.RemarkableFolder{{UUID: "5d1e0c3a-d00d", Title: "Downloads"}})
+				So(listing.Documents, ShouldHaveLength, 1)
+				So(listing.Documents[0].ParentUUID, ShouldEqual, "5d1e0c3a-d00d")
+			})
+		})
+	})
+}
+
 func TestRestartApp(t *testing.T) {
 	Convey("Given a paired tablet with systemctl", t, func() {
 		tablet, client, target, _ := pairedTablet(t)

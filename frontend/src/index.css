@@ -240,6 +240,12 @@ a:hover {
   min-width: 200px;
 }
 
+.library-selects {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .filter-tabs {
   display: flex;
   gap: 8px;

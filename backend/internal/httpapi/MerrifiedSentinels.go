@@ -32,6 +32,7 @@ var merrifiedSentinels = httpx.MerrifiedSentinels{
 	{Sentinel: remarkable.ErrNotPaired, StatusCode: http.StatusBadGateway, UserMessage: "the tablet no longer accepts this server's key, so pair it again"},
 	{Sentinel: remarkable.ErrKeyNotAccepted, StatusCode: http.StatusBadGateway, UserMessage: "the key was installed but the tablet still won't accept it"},
 	{Sentinel: remarkable.ErrHostKeyChanged, StatusCode: http.StatusBadGateway, UserMessage: "the tablet identified itself differently than when it was paired; if you factory-reset or replaced it, pair it again, otherwise something on your network may be impersonating it"},
+	{Sentinel: remarkable.ErrRestartFailed, StatusCode: http.StatusBadGateway, UserMessage: "books were copied to the tablet, but its reading app didn't restart to show them; press Sync now to try again"},
 	{Sentinel: remarkable.ErrTabletUnreachable, StatusCode: http.StatusGatewayTimeout, UserMessage: "couldn't reach the tablet; it may be asleep or off the network"},
 	{Sentinel: openlibrary.ErrEmptyQuery, StatusCode: http.StatusBadRequest, UserMessage: "enter a title, author or ISBN, or pick a genre"},
 	{Sentinel: openlibrary.ErrQueryTooShort, StatusCode: http.StatusBadRequest, UserMessage: fmt.Sprintf("search for at least %d characters", openlibrary.MinimumQueryLength)},

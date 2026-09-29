@@ -9,4 +9,5 @@ var (
 	ErrHostKeyChanged    = errors.New("tablet presented a different host key than when paired")
 	ErrTabletUnreachable = errors.New("tablet unreachable")
 	ErrInvalidDocument   = errors.New("invalid document to copy")
+	ErrRestartFailed     = errors.New("tablet's reading app didn't restart")
 )

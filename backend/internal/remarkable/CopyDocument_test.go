@@ -3,6 +3,7 @@ package remarkable_test
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -118,23 +119,62 @@ func TestCreateFolder(t *testing.T) {
 	})
 }
 
+// fakeSystemctl puts a stand-in systemctl first on the PATH that logs its
+// arguments to the returned file and fails the first failures calls, so
+// tests never touch the machine's real services.
+func fakeSystemctl(t *testing.T, home string, failures int) string {
+	bin := t.TempDir()
+	log := filepath.Join(home, "systemctl.log")
+	count := filepath.Join(home, "systemctl.count")
+	script := fmt.Sprintf(`#!/bin/sh
+echo "$@" >> '%s'
+calls=$(( $(cat '%s' 2>/dev/null || echo 0) + 1 ))
+echo $calls > '%s'
+[ $calls -gt %d ] || { echo "Job for xochitl.service canceled." >&2; exit 1; }
+`, log, count, count, failures)
+	writeFile(filepath.Join(bin, "systemctl"), script)
+	So(os.Chmod(filepath.Join(bin, "systemctl"), 0o755), ShouldBeNil)
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	return log
+}
+
 func TestRestartApp(t *testing.T) {
-	Convey("Given a paired tablet with systemctl", t, func() {
+	Convey("Given a paired tablet whose systemctl works", t, func() {
 		tablet, client, target, _ := pairedTablet(t)
-		// A stand-in systemctl records what it was asked to do, so the test
-		// never touches the machine's real services.
-		bin := t.TempDir()
-		log := filepath.Join(tablet.home, "systemctl.log")
-		writeFile(filepath.Join(bin, "systemctl"), "#!/bin/sh\necho \"$@\" >> '"+log+"'\n")
-		So(os.Chmod(filepath.Join(bin, "systemctl"), 0o755), ShouldBeNil)
-		t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+		log := fakeSystemctl(t, tablet.home, 0)
 		Convey("When restarting its reading app", func() {
 			err := client.RestartApp(target)
-			Convey("Then it restarts xochitl", func() {
+			Convey("Then it restarts xochitl once", func() {
 				So(err, ShouldBeNil)
 				calls, err := os.ReadFile(log)
 				So(err, ShouldBeNil)
 				So(string(calls), ShouldEqual, "restart xochitl\n")
+			})
+		})
+	})
+	Convey("Given a paired tablet that cancels the first restart", t, func() {
+		tablet, client, target, _ := pairedTablet(t)
+		log := fakeSystemctl(t, tablet.home, 1)
+		Convey("When restarting its reading app", func() {
+			err := client.RestartApp(target)
+			Convey("Then it retries and succeeds", func() {
+				So(err, ShouldBeNil)
+				calls, err := os.ReadFile(log)
+				So(err, ShouldBeNil)
+				So(string(calls), ShouldEqual, "restart xochitl\nrestart xochitl\n")
+			})
+		})
+	})
+	Convey("Given a paired tablet that cancels every restart", t, func() {
+		tablet, client, target, _ := pairedTablet(t)
+		log := fakeSystemctl(t, tablet.home, 2)
+		Convey("When restarting its reading app", func() {
+			err := client.RestartApp(target)
+			Convey("Then it makes sure xochitl is started, and returns ErrRestartFailed", func() {
+				So(errors.Is(err, remarkable.ErrRestartFailed), ShouldBeTrue)
+				calls, err := os.ReadFile(log)
+				So(err, ShouldBeNil)
+				So(string(calls), ShouldEqual, "restart xochitl\nrestart xochitl\nstart xochitl\n")
 			})
 		})
 	})

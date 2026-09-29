@@ -134,14 +134,20 @@ func (client *SSHClient) writeFile(connection *ssh.Client, name string, body io.
 	return err
 }
 
+// restartAppScript restarts xochitl, retrying once, since systemd cancels
+// a restart when another job for it arrives first, as when the tablet
+// starts to sleep. If both fail it still starts xochitl, so the tablet is
+// never left without its reading app.
+const restartAppScript = `systemctl restart xochitl || { sleep 3; systemctl restart xochitl; } || { systemctl start xochitl; exit 1; }`
+
 func (client *SSHClient) RestartApp(tablet Tablet) error {
 	connection, _, err := client.dialKey(tablet)
 	if err != nil {
 		return err
 	}
 	defer connection.Close()
-	if _, err := run(connection, "systemctl restart xochitl"); err != nil {
-		return fmt.Errorf("restarting the tablet's reading app: %w", err)
+	if _, err := run(connection, restartAppScript); err != nil {
+		return fmt.Errorf("%w: %w", ErrRestartFailed, err)
 	}
 	return nil
 }

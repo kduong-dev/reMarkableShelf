@@ -32,6 +32,10 @@ type Store interface {
 	// Unlink detaches a document from its book and stops sync linking it
 	// again by title.
 	Unlink(deviceID, documentUUID string) error
+	// UnlinkBook is Unlink for every document linked to the book, on every
+	// device, including ones since removed from their tablet, so sync
+	// neither links them by title nor imports them as books again.
+	UnlinkBook(bookID string) error
 	// SetCover stores a document's cover as fetched when the document was
 	// last modified at checkedAt. A nil image records the check but keeps
 	// any cover already stored.

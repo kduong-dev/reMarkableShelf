@@ -152,6 +152,17 @@ func (documentStore *SQLiteStore) SetNotABook(deviceID, docUUID string, notABook
 	return nil
 }
 
+func (documentStore *SQLiteStore) UnlinkBook(bookID string) error {
+	_, err := documentStore.database.Exec(
+		`UPDATE remarkable_documents SET linked_book_id = NULL, auto_link_dismissed = 1 WHERE linked_book_id = ?`,
+		bookID,
+	)
+	if err != nil {
+		return fmt.Errorf("unlinking the book's documents: %w", err)
+	}
+	return nil
+}
+
 func (documentStore *SQLiteStore) Unlink(deviceID, docUUID string) error {
 	result, err := documentStore.database.Exec(
 		`UPDATE remarkable_documents SET linked_book_id = NULL, auto_link_dismissed = 1 WHERE device_id = ? AND uuid = ?`,

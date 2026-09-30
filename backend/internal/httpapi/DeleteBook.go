@@ -22,6 +22,11 @@ func (api *API) DeleteBook(responseWriter http.ResponseWriter, request *http.Req
 	if err = api.bookFileStore.Delete(request.Context(), bookID); err != nil && !errors.Is(err, bookfilestore.ErrFileNotFound) {
 		return
 	}
+	// Its tablet documents stay on the tablet; unlinking them first keeps
+	// sync from importing them as books again.
+	if err = api.documentStore.UnlinkBook(bookID); err != nil {
+		return
+	}
 	err = api.bookStore.Delete(bookID)
 	if err != nil {
 		return

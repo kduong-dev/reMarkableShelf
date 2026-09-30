@@ -109,6 +109,9 @@ func (syncer *Syncer) syncDevice(deviceID string, restartApp bool) ([]models.Rem
 	if err := syncer.autoLinkDocuments(device.ID); err != nil {
 		return nil, err
 	}
+	if err := syncer.importDocuments(device.ID, listing.Folders); err != nil {
+		return nil, err
+	}
 	copied, createdFolder, err := syncer.copyBooks(device, listing.Folders)
 	if err != nil {
 		return nil, err

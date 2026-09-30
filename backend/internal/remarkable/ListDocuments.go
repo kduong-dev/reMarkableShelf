@@ -102,12 +102,10 @@ func ParseListOutput(output string) (Listing, error) {
 			ParentUUID:   meta.Parent,
 			FileType:     Classify(c.FileType),
 			LastModified: lastModified,
-			BookTitle:    strings.TrimSpace(c.DocumentMetadata.Title),
+			BookTitle:    c.DocumentMetadata.title(),
 			CoverPageID:  coverPageID(meta, c),
 		}
-		if len(c.DocumentMetadata.Authors) > 0 {
-			document.BookAuthor = strings.TrimSpace(c.DocumentMetadata.Authors[0])
-		}
+		document.BookAuthor = c.DocumentMetadata.author()
 		if position, ok := documentPosition(meta, c); ok {
 			document.CurrentPage = &position.currentPage
 			document.PageCount = &position.pageCount

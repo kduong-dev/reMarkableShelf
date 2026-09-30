@@ -157,3 +157,32 @@ func TestParseListOutput(t *testing.T) {
 		})
 	})
 }
+
+func TestParseEmbeddedMetadata(t *testing.T) {
+	Convey("Given EPUBs whose embedded title and author are placeholders or written surname first", t, func() {
+		epub := func(uuid, title, author string) string {
+			return record(uuid, `{"type": "DocumentType", "visibleName": "Book"}`,
+				fmt.Sprintf(`{"fileType": "epub", "documentMetadata": {"title": %q, "authors": [%q]}}`, title, author))
+		}
+		output := epub("clean-code", "0d66f70d-fa40-48b7-b3c6-a83f6d3a4b02", "Unknown") +
+			epub("microservices", "Building Microservices", "Newman, Sam;") +
+			epub("nations", "  Why Nations Fail ", "Daron  Acemoglu") +
+			epub("urn", "urn:uuid:0d66f70d-fa40-48b7-b3c6-a83f6d3a4b02", "unknown author")
+		Convey("When parsing the listing", func() {
+			listing, err := remarkable.ParseListOutput(output)
+			So(err, ShouldBeNil)
+			metadata := map[string][2]string{}
+			for _, document := range listing.Documents {
+				metadata[document.UUID] = [2]string{document.BookTitle, document.BookAuthor}
+			}
+			Convey("Then placeholders are dropped, and names are tidied and put first name first", func() {
+				So(metadata, ShouldResemble, map[string][2]string{
+					"clean-code":    {"", ""},
+					"microservices": {"Building Microservices", "Sam Newman"},
+					"nations":       {"Why Nations Fail", "Daron Acemoglu"},
+					"urn":           {"", ""},
+				})
+			})
+		})
+	})
+}

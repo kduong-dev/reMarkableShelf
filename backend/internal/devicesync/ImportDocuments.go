@@ -44,13 +44,13 @@ func (syncer *Syncer) importDocuments(deviceID string, folders []models.Remarkab
 	return nil
 }
 
-// importedBook is the book a tablet document is added as. An EPUB names
-// its own title and author reliably; a PDF's embedded title is often a
-// leftover such as "Microsoft Word - doc1", so a PDF takes its file name.
+// importedBook is the book a tablet document is added as, under the name
+// the tablet shows for it: a file's embedded title can be a leftover, such
+// as "Microsoft Word - doc1" in a PDF or an ID in an EPUB. An EPUB's
+// author is taken from the file; a PDF's is too often wrong to.
 func importedBook(document models.RemarkableDocument) models.Book {
 	book := models.Book{Title: titleFromFileName(document.Title), Source: models.SourceRemarkable}
-	if document.FileType == models.FileTypeEPUB && document.BookTitle != "" {
-		book.Title = document.BookTitle
+	if document.FileType == models.FileTypeEPUB {
 		book.Author = document.BookAuthor
 	}
 	return book

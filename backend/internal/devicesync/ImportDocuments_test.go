@@ -26,7 +26,7 @@ func TestSyncImportsDocuments(t *testing.T) {
 				{UUID: "carnegie", Title: "Dale Carnegie - How to Win Friends (Veridian Digital Press).pdf", FileType: models.FileTypePDF,
 					BookTitle: "Microsoft Word - carnegie.docx", CurrentPage: pages(42), PageCount: pages(171), PositionUpdatedAt: &openedAt, LastModified: openedAt},
 				{UUID: "crucial", Title: "Crucial Conversations_ Tools for Talking (2011, McGraw-Hill).pdf", FileType: models.FileTypePDF},
-				{UUID: "nations", Title: "Why Nations Fail", FileType: models.FileTypeEPUB, BookTitle: "Why Nations Fail", BookAuthor: "Daron Acemoglu"},
+				{UUID: "nations", Title: "Why Nations Fail", FileType: models.FileTypeEPUB, BookTitle: "Why Nations Fail: The Origins of Power", BookAuthor: "Daron Acemoglu"},
 				{UUID: "untitled", Title: "The Time Machine", FileType: models.FileTypeEPUB},
 				{UUID: "sketch", Title: "Scribbles", FileType: models.FileTypeNotebook},
 				{UUID: "journal", Title: "Journal 2025", FileType: models.FileTypePDF},
@@ -74,7 +74,7 @@ func TestSyncImportsDocuments(t *testing.T) {
 				So(books["carnegie"].Title, ShouldEqual, "Dale Carnegie - How to Win Friends")
 				So(books["crucial"].Title, ShouldEqual, "Crucial Conversations: Tools for Talking")
 			})
-			Convey("Then an EPUB takes its own title and author, or its name when it has none", func() {
+			Convey("Then an EPUB is named as the tablet shows it, with the author from the file", func() {
 				So(books["nations"].Title, ShouldEqual, "Why Nations Fail")
 				So(books["nations"].Author, ShouldEqual, "Daron Acemoglu")
 				So(books["untitled"].Title, ShouldEqual, "The Time Machine")

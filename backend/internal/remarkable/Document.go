@@ -2,7 +2,9 @@ package remarkable
 
 import (
 	"encoding/json"
+	"regexp"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -65,6 +67,40 @@ func (c content) pageIDs() []string {
 type documentMetadata struct {
 	Title   string   `json:"title"`
 	Authors []string `json:"authors"`
+}
+
+var (
+	// identifierTitle matches a title that's only an ID, such as the UUID
+	// some EPUB tools write when they have no title.
+	identifierTitle = regexp.MustCompile(`^(urn:)?(uuid:)?[0-9a-fA-F-]{16,}$`)
+	// placeholderName matches what EPUB tools write for an unknown title or
+	// author.
+	placeholderName = regexp.MustCompile(`(?i)^(unknown( author)?|untitled|n/?a|none)$`)
+)
+
+// title is the book's own title, or "" if the file only has a placeholder.
+func (m documentMetadata) title() string {
+	title := strings.TrimSpace(m.Title)
+	if identifierTitle.MatchString(title) || placeholderName.MatchString(title) {
+		return ""
+	}
+	return title
+}
+
+// author is the book's first author as they're usually written, turning
+// "Newman, Sam;" into "Sam Newman", or "" if the file names none.
+func (m documentMetadata) author() string {
+	if len(m.Authors) == 0 {
+		return ""
+	}
+	author := strings.TrimSpace(strings.TrimRight(strings.TrimSpace(m.Authors[0]), ";"))
+	if placeholderName.MatchString(author) {
+		return ""
+	}
+	if last, first, ok := strings.Cut(author, ","); ok && !strings.Contains(first, ",") {
+		author = strings.TrimSpace(first) + " " + strings.TrimSpace(last)
+	}
+	return strings.Join(strings.Fields(author), " ")
 }
 
 type cPages struct {

@@ -3,6 +3,9 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"time"
+
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/models"
 )
 
 const schema = `
@@ -66,12 +69,24 @@ CREATE TABLE IF NOT EXISTS remarkable_folders (
 
 CREATE INDEX IF NOT EXISTS idx_remarkable_documents_device ON remarkable_documents(device_id);
 
+CREATE TABLE IF NOT EXISTS ebook_sources (
+	id              TEXT PRIMARY KEY,
+	kind            TEXT NOT NULL,
+	name            TEXT NOT NULL,
+	url             TEXT NOT NULL DEFAULT '',
+	search_url      TEXT NOT NULL DEFAULT '',
+	priority        INTEGER NOT NULL,
+	enabled         INTEGER NOT NULL DEFAULT 1,
+	created_at      DATETIME NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS book_files (
 	book_id         TEXT PRIMARY KEY REFERENCES books(id) ON DELETE CASCADE,
 	storage_file_id TEXT NOT NULL,
 	format          TEXT NOT NULL,
 	size            INTEGER NOT NULL,
 	source          TEXT NOT NULL,
+	source_name     TEXT NOT NULL DEFAULT '',
 	saved_at        DATETIME NOT NULL
 );
 
@@ -111,6 +126,7 @@ var addedColumns = []struct {
 	{"remarkable_documents", "removed_at", "DATETIME"},
 	{"devices", "downloads_folder_uuid", "TEXT NOT NULL DEFAULT ''"},
 	{"remarkable_documents", "not_a_book", "INTEGER NOT NULL DEFAULT 0"},
+	{"book_files", "source_name", "TEXT NOT NULL DEFAULT ''"},
 }
 
 func migrate(database *sql.DB) error {
@@ -126,7 +142,23 @@ func migrate(database *sql.DB) error {
 			return err
 		}
 	}
+	if err := seedEbookSources(database); err != nil {
+		return err
+	}
 	return removeOrphans(database)
+}
+
+// seedEbookSources adds the built-in Internet Archive source, first in
+// line, to a library that doesn't have it yet.
+func seedEbookSources(database *sql.DB) error {
+	_, err := database.Exec(
+		`INSERT OR IGNORE INTO ebook_sources (id, kind, name, priority, enabled, created_at) VALUES (?, ?, ?, 0, 1, ?)`,
+		models.BuiltInEbookSourceID, models.EbookSourceKindInternetArchive, "Internet Archive", time.Now().UTC(),
+	)
+	if err != nil {
+		return fmt.Errorf("adding the built-in book source: %w", err)
+	}
+	return nil
 }
 
 // removeOrphans repairs rows left behind while foreign keys weren't

@@ -108,7 +108,38 @@ export interface BookFile {
   bookId: string
   format: BookFileFormat
   size: number
-  source: 'open_library' | 'upload'
+  // source is how the file arrived; a fetched one names its sourceName.
+  source: 'open_library' | 'upload' | 'fetched'
+  sourceName?: string
   savedAt: string
   deliveries: Delivery[]
+}
+
+export type EbookSourceKind = 'internet_archive' | 'plugin' | 'opds'
+
+// EbookSource is where ebooks are fetched from, tried in priority order.
+export interface EbookSource {
+  id: string
+  kind: EbookSourceKind
+  name: string
+  url?: string
+  priority: number
+  enabled: boolean
+  createdAt: string
+}
+
+export interface SourceEbook {
+  id: string
+  title: string
+  author?: string
+  format: BookFileFormat
+  size?: number
+  description?: string
+}
+
+// SourceEbooks is what one source found of a book, or why it couldn't look.
+export interface SourceEbooks {
+  source: EbookSource
+  ebooks: SourceEbook[]
+  error?: string
 }

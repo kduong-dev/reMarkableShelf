@@ -4,8 +4,11 @@ import type {
   BookSearch,
   BookSearchResults,
   Device,
+  EbookSource,
+  EbookSourceKind,
   RemarkableDocument,
   RemarkableFolder,
+  SourceEbooks,
 } from './types'
 
 // ApiError is a failed request, with its status so callers can tell a
@@ -75,8 +78,25 @@ export const api = {
       headers: { 'Content-Type': file.type || 'application/octet-stream' },
       body: file,
     }),
-  // fetchBookFile saves the free ebook of a public domain book on the server.
-  fetchBookFile: (bookId: string) => request<BookFile>(`/books/${bookId}/file/fetch`, { method: 'POST' }),
+  // fetchBookFile saves an ebook of the book on the server: the chosen one,
+  // else the preferred ebook of the first source that has the book.
+  fetchBookFile: (bookId: string, choice?: { sourceId: string; ebookId: string }) =>
+    request<BookFile>(`/books/${bookId}/file/fetch`, {
+      method: 'POST',
+      body: choice ? JSON.stringify(choice) : undefined,
+    }),
+  // listBookEbooks asks every enabled source for ebooks of the book.
+  listBookEbooks: (bookId: string) => requestList<SourceEbooks>(`/books/${bookId}/ebooks`),
+
+  listSources: () => requestList<EbookSource>('/sources'),
+  // addSource installs a plugin or OPDS catalog, named by itself.
+  addSource: (kind: EbookSourceKind, url: string) =>
+    request<EbookSource>('/sources', { method: 'POST', body: JSON.stringify({ kind, url }) }),
+  setSourceEnabled: (id: string, enabled: boolean) =>
+    request<EbookSource>(`/sources/${id}`, { method: 'PUT', body: JSON.stringify({ enabled }) }),
+  reorderSources: (ids: string[]) =>
+    requestList<EbookSource>('/sources/order', { method: 'PUT', body: JSON.stringify({ ids }) }),
+  removeSource: (id: string) => request<void>(`/sources/${id}`, { method: 'DELETE' }),
   deleteBookFile: (bookId: string) => request<void>(`/books/${bookId}/file`, { method: 'DELETE' }),
   bookFileContentUrl: (bookId: string) => `/api/books/${bookId}/file/content`,
 
@@ -87,10 +107,12 @@ export const api = {
     }
     return request<BookSearchResults>(`/search/books?${params}`, { signal })
   },
-  // downloadBook fetches a public domain work's ebook, with the file name the
-  // server gives it.
-  downloadBook: async (openLibraryId: string) => {
-    const res = await send(`/search/books/${openLibraryId}/download`)
+  // downloadBook fetches an ebook of a search result from the first source
+  // that has one, with the file name the server gives it. The title and
+  // author let sources other than the Internet Archive look for it.
+  downloadBook: async (result: { openLibraryId: string; title: string; author: string }) => {
+    const params = new URLSearchParams({ title: result.title, author: result.author })
+    const res = await send(`/search/books/${result.openLibraryId}/download?${params}`)
     return { file: await res.blob(), fileName: fileNameOf(res.headers.get('Content-Disposition')) }
   },
 

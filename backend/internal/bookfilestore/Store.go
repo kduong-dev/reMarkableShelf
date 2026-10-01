@@ -32,10 +32,13 @@ type Store interface {
 	MarkLoaded(deviceID string, loadedAt time.Time) error
 }
 
+// SaveInput is a book's file and where it came from, with SourceName naming
+// the book source a fetched file came from.
 type SaveInput struct {
-	BookID string
-	Source models.BookFileSource
-	Body   io.Reader
+	BookID     string
+	Source     models.BookFileSource
+	SourceName string
+	Body       io.Reader
 }
 
 // RecordDeliveryInput is a book's file copied to a device as the document

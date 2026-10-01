@@ -23,12 +23,16 @@ func TestBookFile(t *testing.T) {
 		book, err := stores.BookStore.Create(models.Book{Title: "Pride and Prejudice", OpenLibraryID: "OL66554W"})
 		So(err, ShouldBeNil)
 		handler := httpapi.NewHandler(httpapi.NewHandlerInput{
-			BookFileStore:   stores.BookFileStore,
-			BookStore:       stores.BookStore,
-			DeviceStore:     stores.DeviceStore,
-			DocumentStore:   stores.DocumentStore,
-			OpenLibrary:     fakeOpenLibrary{scans: openlibrary.Scans{Title: "Pride and Prejudice", ArchiveIDs: []string{"pride42671gut"}}},
-			InternetArchive: fakeInternetArchive{ebook: internetarchive.Ebook{Format: internetarchive.FormatPDF}, contents: "%PDF-1.7 from the archive"},
+			BookFileStore: stores.BookFileStore,
+			BookStore:     stores.BookStore,
+			DeviceStore:   stores.DeviceStore,
+			DocumentStore: stores.DocumentStore,
+			OpenLibrary:   fakeOpenLibrary{scans: openlibrary.Scans{Title: "Pride and Prejudice", ArchiveIDs: []string{"pride42671gut"}}},
+			InternetArchive: fakeInternetArchive{
+				ebook:    internetarchive.Ebook{Identifier: "pride42671gut", FileName: "pg42671.pdf", Format: internetarchive.FormatPDF},
+				contents: "%PDF-1.7 from the archive",
+			},
+			SourceStore: stores.SourceStore,
 		})
 		send := func(method, path string, body io.Reader) *httptest.ResponseRecorder {
 			recorder := httptest.NewRecorder()
@@ -96,20 +100,21 @@ func TestBookFile(t *testing.T) {
 		})
 		Convey("When fetching the free ebook", func() {
 			recorder := send(http.MethodPost, filePath+"/fetch", nil)
-			Convey("Then the archive's file is saved as from Open Library", func() {
+			Convey("Then the archive's file is saved as fetched from the Internet Archive", func() {
 				So(recorder.Code, ShouldEqual, http.StatusOK)
 				file := fileOf(recorder)
 				So(file.Format, ShouldEqual, models.FileTypePDF)
-				So(file.Source, ShouldEqual, models.BookFileSourceOpenLibrary)
+				So(file.Source, ShouldEqual, models.BookFileSourceFetched)
+				So(file.SourceName, ShouldEqual, "Internet Archive")
 			})
 		})
 		Convey("When fetching for a book not matched to Open Library", func() {
 			unmatched, err := stores.BookStore.Create(models.Book{Title: "Meeting notes"})
 			So(err, ShouldBeNil)
 			recorder := send(http.MethodPost, "/api/books/"+unmatched.ID+"/file/fetch", nil)
-			Convey("Then it responds 400 asking to match it first", func() {
-				So(recorder.Code, ShouldEqual, http.StatusBadRequest)
-				So(recorder.Body.String(), ShouldContainSubstring, "find this book on Open Library first")
+			Convey("Then it responds 404, as the Internet Archive needs an Open Library match and no other source is added", func() {
+				So(recorder.Code, ShouldEqual, http.StatusNotFound)
+				So(recorder.Body.String(), ShouldContainSubstring, "none of your ebook sources has this book")
 			})
 		})
 	})

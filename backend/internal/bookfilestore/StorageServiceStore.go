@@ -56,10 +56,10 @@ func (store *StorageServiceStore) Save(ctx context.Context, input SaveInput) (mo
 		return models.BookFile{}, fmt.Errorf("%w: uploading book file: %w", ErrStorageUnavailable, err)
 	}
 	_, err = store.database.Exec(`
-		INSERT INTO book_files (book_id, storage_file_id, format, size, source, saved_at) VALUES (?, ?, ?, ?, ?, ?)
+		INSERT INTO book_files (book_id, storage_file_id, format, size, source, source_name, saved_at) VALUES (?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (book_id) DO UPDATE SET storage_file_id = excluded.storage_file_id, format = excluded.format,
-			size = excluded.size, source = excluded.source, saved_at = excluded.saved_at`,
-		input.BookID, uploaded.ID, format, uploaded.Size, input.Source, time.Now().UTC())
+			size = excluded.size, source = excluded.source, source_name = excluded.source_name, saved_at = excluded.saved_at`,
+		input.BookID, uploaded.ID, format, uploaded.Size, input.Source, input.SourceName, time.Now().UTC())
 	if err != nil {
 		store.deleteStorageFile(ctx, uploaded.ID)
 		return models.BookFile{}, fmt.Errorf("recording book file: %w", err)
@@ -72,8 +72,8 @@ func (store *StorageServiceStore) Save(ctx context.Context, input SaveInput) (mo
 
 func (store *StorageServiceStore) Get(bookID string) (models.BookFile, error) {
 	var file models.BookFile
-	err := store.database.QueryRow(`SELECT book_id, format, size, source, saved_at FROM book_files WHERE book_id = ?`, bookID).
-		Scan(&file.BookID, &file.Format, &file.Size, &file.Source, &file.SavedAt)
+	err := store.database.QueryRow(`SELECT book_id, format, size, source, source_name, saved_at FROM book_files WHERE book_id = ?`, bookID).
+		Scan(&file.BookID, &file.Format, &file.Size, &file.Source, &file.SourceName, &file.SavedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return models.BookFile{}, fmt.Errorf("book %q: %w", bookID, ErrFileNotFound)
 	}
@@ -114,7 +114,7 @@ func (store *StorageServiceStore) Delete(ctx context.Context, bookID string) err
 
 func (store *StorageServiceStore) ListUndelivered(deviceID string) ([]models.BookFile, error) {
 	rows, err := store.database.Query(`
-		SELECT book_id, format, size, source, saved_at FROM book_files
+		SELECT book_id, format, size, source, source_name, saved_at FROM book_files
 		 WHERE book_id NOT IN (SELECT book_id FROM book_file_deliveries WHERE device_id = ?)
 		 ORDER BY saved_at`, deviceID)
 	if err != nil {
@@ -124,7 +124,7 @@ func (store *StorageServiceStore) ListUndelivered(deviceID string) ([]models.Boo
 	files := []models.BookFile{}
 	for rows.Next() {
 		var file models.BookFile
-		if err := rows.Scan(&file.BookID, &file.Format, &file.Size, &file.Source, &file.SavedAt); err != nil {
+		if err := rows.Scan(&file.BookID, &file.Format, &file.Size, &file.Source, &file.SourceName, &file.SavedAt); err != nil {
 			return nil, fmt.Errorf("listing undelivered book files: %w", err)
 		}
 		files = append(files, file)

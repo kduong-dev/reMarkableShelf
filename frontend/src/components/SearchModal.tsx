@@ -211,7 +211,7 @@ export function SearchModal({
     setDownloadingId(result.openLibraryId)
     setError(null)
     try {
-      const { file, fileName } = await api.downloadBook(result.openLibraryId)
+      const { file, fileName } = await api.downloadBook(result)
       saveFile(file, fileName)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'download failed')

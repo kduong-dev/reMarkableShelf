@@ -1,11 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
-import type { Book, BookFile, Device } from '../api/types'
+import type { Book, BookFile, Device, SourceEbook, SourceEbooks } from '../api/types'
 import { timeAgo } from '../timeAgo'
 
 function fileSize(bytes: number): string {
   if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(1)} MB`
   return `${Math.max(1, Math.round(bytes / 1_000))} KB`
+}
+
+// fileOrigin says where a saved file came from.
+function fileOrigin(file: BookFile): string {
+  if (file.source === 'upload') return 'uploaded'
+  if (file.source === 'open_library') return 'from Open Library'
+  return `from ${file.sourceName ?? 'a source'}`
 }
 
 // deliveryStatus says where the book's copy stands on a paired tablet.
@@ -24,6 +31,9 @@ export function BookFilePanel({ book }: { book: Book }) {
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const uploadInput = useRef<HTMLInputElement>(null)
+  // choices is what each source found of the book, once asked for; null
+  // while they're being asked.
+  const [choices, setChoices] = useState<SourceEbooks[] | null | undefined>(undefined)
 
   useEffect(() => {
     api
@@ -54,6 +64,25 @@ export function BookFilePanel({ book }: { book: Book }) {
     if (chosen) act('Uploading…', () => api.uploadBookFile(book.id, chosen))
   }
 
+  async function chooseSource() {
+    setChoices(null)
+    setError(null)
+    try {
+      setChoices(await api.listBookEbooks(book.id))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'failed to ask the sources')
+      setChoices(undefined)
+    }
+  }
+
+  function fetchChoice(sourceId: string, ebook: SourceEbook) {
+    act('Fetching…', async () => {
+      const fetched = await api.fetchBookFile(book.id, { sourceId, ebookId: ebook.id })
+      setChoices(undefined)
+      return fetched
+    })
+  }
+
   function remove() {
     if (!confirm('Remove this file from the server? Copies already on your tablets stay there.')) return
     act('Removing…', async () => {
@@ -70,8 +99,7 @@ export function BookFilePanel({ book }: { book: Book }) {
         <span className="book-file-label">Ebook</span>
         {file && (
           <span className="book-file-status">
-            {file.format.toUpperCase()} · {fileSize(file.size)} ·{' '}
-            {file.source === 'open_library' ? 'from Open Library' : 'uploaded'} {timeAgo(file.savedAt)}
+            {file.format.toUpperCase()} · {fileSize(file.size)} · {fileOrigin(file)} {timeAgo(file.savedAt)}
           </span>
         )}
       </div>
@@ -94,11 +122,14 @@ export function BookFilePanel({ book }: { book: Book }) {
         </p>
       )}
       <div className="book-file-actions">
-        {!file && book.openLibraryId && (
+        {!file && (
           <button onClick={() => act('Fetching…', () => api.fetchBookFile(book.id))} disabled={busy !== null}>
-            {busy === 'Fetching…' ? busy : 'Fetch free ebook'}
+            {busy === 'Fetching…' && !choices ? busy : 'Fetch ebook'}
           </button>
         )}
+        <button className="text-button" onClick={chooseSource} disabled={busy !== null || choices === null}>
+          {choices === null ? 'Asking sources…' : file ? 'Fetch from a source…' : 'Choose source…'}
+        </button>
         <button onClick={() => uploadInput.current?.click()} disabled={busy !== null}>
           {busy === 'Uploading…' ? busy : file ? 'Replace file' : 'Upload EPUB or PDF'}
         </button>
@@ -120,8 +151,39 @@ export function BookFilePanel({ book }: { book: Book }) {
           onChange={upload}
         />
       </div>
-      {!file && book.openLibraryId && (
-        <p className="book-file-hint">Free ebooks are only available for public domain books.</p>
+      {!file && !choices && (
+        <p className="book-file-hint">
+          Fetch ebook asks your sources in order, set on the Sources page; the Internet Archive has public domain
+          books matched on Open Library.
+        </p>
+      )}
+      {choices && (
+        <ul className="source-choices">
+          {choices.length === 0 && <li className="book-file-hint">All your sources are disabled.</li>}
+          {choices.map(({ source, ebooks, error: sourceError }) => (
+            <li key={source.id}>
+              <strong>{source.name}</strong>
+              {sourceError ? (
+                <div className="source-choice-detail">{sourceError}</div>
+              ) : ebooks.length === 0 ? (
+                <div className="source-choice-detail">Doesn't have this book</div>
+              ) : (
+                ebooks.map((ebook) => (
+                  <div key={ebook.id} className="source-choice">
+                    <span className="source-choice-detail">
+                      {[ebook.format.toUpperCase(), ebook.size ? fileSize(ebook.size) : null, ebook.description || ebook.title]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </span>
+                    <button onClick={() => fetchChoice(source.id, ebook)} disabled={busy !== null}>
+                      {file ? 'Replace with this' : 'Fetch this'}
+                    </button>
+                  </div>
+                ))
+              )}
+            </li>
+          ))}
+        </ul>
       )}
       {error && <p className="error">{error}</p>}
     </div>

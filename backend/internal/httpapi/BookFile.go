@@ -7,7 +7,9 @@ import (
 	"github.com/ansel1/merry"
 	"github.com/gorilla/mux"
 	"github.com/kduong-dev/goutil/httpx"
+	"github.com/kduong-dev/goutil/logx"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/bookfilestore"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/booksource"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/models"
 )
 
@@ -59,8 +61,9 @@ func (api *API) UploadBookFile(responseWriter http.ResponseWriter, request *http
 	httpx.SendJSONResponse(responseWriter, http.StatusOK, file)
 }
 
-// FetchBookFile saves the free ebook of a public domain book, looked up by
-// the Open Library work it's matched to.
+// FetchBookFile saves an ebook of the book on the server: the one picked
+// from a source, if the body names one, else the preferred ebook of the
+// first enabled source that has the book.
 func (api *API) FetchBookFile(responseWriter http.ResponseWriter, request *http.Request) {
 	var err error
 	defer func() {
@@ -72,24 +75,70 @@ func (api *API) FetchBookFile(responseWriter http.ResponseWriter, request *http.
 	if err != nil {
 		return
 	}
-	if book.OpenLibraryID == "" {
-		err = merry.Here(ErrNoOpenLibraryWork)
-		return
+	var choice ebookChoice
+	if request.ContentLength != 0 {
+		if choice, err = httpx.DecodeJSONBody[ebookChoice](request); err != nil {
+			return
+		}
 	}
-	_, _, download, err := api.openPublicEbook(request.Context(), book.OpenLibraryID)
+	source, _, download, err := api.openEbook(request.Context(), queryOf(book), choice)
 	if err != nil {
 		return
 	}
 	defer download.Body.Close()
 	file, err := api.bookFileStore.Save(request.Context(), bookfilestore.SaveInput{
-		BookID: book.ID,
-		Source: models.BookFileSourceOpenLibrary,
-		Body:   download.Body,
+		BookID:     book.ID,
+		Source:     models.BookFileSourceFetched,
+		SourceName: source.Name,
+		Body:       download.Body,
 	})
 	if err != nil {
 		return
 	}
 	httpx.SendJSONResponse(responseWriter, http.StatusOK, file)
+}
+
+// sourceEbooks is what one source found of a book, with Error saying why it
+// couldn't look.
+type sourceEbooks struct {
+	Source models.EbookSource `json:"source"`
+	Ebooks []booksource.Ebook `json:"ebooks"`
+	Error  string             `json:"error,omitempty"`
+}
+
+// ListBookEbooks asks every enabled source for ebooks of the book, so one
+// can be picked, listing the sources in priority order.
+func (api *API) ListBookEbooks(responseWriter http.ResponseWriter, request *http.Request) {
+	var err error
+	defer func() {
+		if err != nil {
+			merrifiedSentinels.SendErrorResponse(responseWriter, err)
+		}
+	}()
+	book, err := api.bookStore.Get(mux.Vars(request)["id"])
+	if err != nil {
+		return
+	}
+	sources, err := api.sourceStore.List()
+	if err != nil {
+		return
+	}
+	listed := []sourceEbooks{}
+	for _, found := range api.ebookSources.FindAll(request.Context(), sources, queryOf(book)) {
+		entry := sourceEbooks{Source: found.Source, Ebooks: found.Ebooks}
+		if entry.Ebooks == nil {
+			entry.Ebooks = []booksource.Ebook{}
+		}
+		if found.Err != nil {
+			logx.Warnf("finding ebooks of %q in %s: %v", book.Title, found.Source.Name, found.Err)
+			entry.Error = "couldn't search this source"
+			if errors.Is(found.Err, booksource.ErrSourceUnavailable) {
+				entry.Error = "the source didn't answer"
+			}
+		}
+		listed = append(listed, entry)
+	}
+	httpx.SendJSONResponse(responseWriter, http.StatusOK, listed)
 }
 
 // DownloadBookFile sends the file saved for a book, named after the book.

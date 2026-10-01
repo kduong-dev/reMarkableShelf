@@ -35,16 +35,17 @@ func (fake fakeInternetArchive) OpenEbook(ctx context.Context, ebook internetarc
 }
 
 func downloadBook(t *testing.T, openLibrary openlibrary.API, internetArchive internetarchive.API) *httptest.ResponseRecorder {
-	bookStore, deviceStore, documentStore := storetest.Open(t)
+	stores := storetest.OpenStores(t)
 	handler := httpapi.NewHandler(httpapi.NewHandlerInput{
-		BookStore:       bookStore,
-		DeviceStore:     deviceStore,
-		DocumentStore:   documentStore,
+		BookStore:       stores.BookStore,
+		DeviceStore:     stores.DeviceStore,
+		DocumentStore:   stores.DocumentStore,
 		InternetArchive: internetArchive,
 		OpenLibrary:     openLibrary,
+		SourceStore:     stores.SourceStore,
 	})
 	recorder := httptest.NewRecorder()
-	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/search/books/OL66554W/download", nil))
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/search/books/OL66554W/download?title=Pride+and+Prejudice", nil))
 	return recorder
 }
 
@@ -75,9 +76,9 @@ func TestDownloadBook(t *testing.T) {
 		openLibrary := fakeOpenLibrary{err: openlibrary.ErrNotPublicDomain}
 		Convey("When downloading it", func() {
 			recorder := downloadBook(t, openLibrary, fakeInternetArchive{})
-			Convey("Then it responds 404 explaining only public domain books download", func() {
+			Convey("Then it responds 404, as no source has it", func() {
 				So(recorder.Code, ShouldEqual, http.StatusNotFound)
-				So(recorder.Body.String(), ShouldContainSubstring, "only public domain books can be downloaded")
+				So(recorder.Body.String(), ShouldContainSubstring, "none of your ebook sources has this book")
 			})
 		})
 	})
@@ -86,9 +87,9 @@ func TestDownloadBook(t *testing.T) {
 		internetArchive := fakeInternetArchive{err: internetarchive.ErrNoPublicEbook}
 		Convey("When downloading it", func() {
 			recorder := downloadBook(t, openLibrary, internetArchive)
-			Convey("Then it responds 404", func() {
+			Convey("Then it responds 404, as no source has it", func() {
 				So(recorder.Code, ShouldEqual, http.StatusNotFound)
-				So(recorder.Body.String(), ShouldContainSubstring, "no free EPUB or PDF")
+				So(recorder.Body.String(), ShouldContainSubstring, "none of your ebook sources has this book")
 			})
 		})
 	})

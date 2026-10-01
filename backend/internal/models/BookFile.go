@@ -10,6 +10,9 @@ const (
 	BookFileSourceOpenLibrary BookFileSource = "open_library"
 	// BookFileSourceUpload is a file the user uploaded.
 	BookFileSourceUpload BookFileSource = "upload"
+	// BookFileSourceFetched is an ebook fetched from a book source, named
+	// by SourceName.
+	BookFileSourceFetched BookFileSource = "fetched"
 )
 
 // BookFile is an ebook kept on the server for a book, which sync copies to
@@ -19,6 +22,7 @@ type BookFile struct {
 	Format     FileType       `json:"format"`
 	Size       int64          `json:"size"`
 	Source     BookFileSource `json:"source"`
+	SourceName string         `json:"sourceName,omitempty"`
 	SavedAt    time.Time      `json:"savedAt"`
 	Deliveries []Delivery     `json:"deliveries"`
 }

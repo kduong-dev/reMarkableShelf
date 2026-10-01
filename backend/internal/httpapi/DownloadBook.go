@@ -11,8 +11,8 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/kduong-dev/goutil/logx"
-	"github.com/kduong-dev/reMarkableShelf/backend/internal/internetarchive"
-	"github.com/kduong-dev/reMarkableShelf/backend/internal/openlibrary"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/booksource"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/models"
 )
 
 var contentTypes = map[string]string{
@@ -20,8 +20,10 @@ var contentTypes = map[string]string{
 	"pdf":  "application/pdf",
 }
 
-// DownloadBook streams a public domain work's ebook from the Internet
-// Archive, named after the work's title.
+// DownloadBook streams an ebook of a search result, from the first enabled
+// source that has one, named after the ebook. The result's title and
+// author, passed as parameters, let sources other than the Internet
+// Archive look for it.
 func (api *API) DownloadBook(responseWriter http.ResponseWriter, request *http.Request) {
 	var err error
 	defer func() {
@@ -29,13 +31,22 @@ func (api *API) DownloadBook(responseWriter http.ResponseWriter, request *http.R
 			merrifiedSentinels.SendErrorResponse(responseWriter, err)
 		}
 	}()
-	scans, ebook, download, err := api.openPublicEbook(request.Context(), mux.Vars(request)["openLibraryId"])
+	query := booksource.Query{
+		Title:         request.URL.Query().Get("title"),
+		Author:        request.URL.Query().Get("author"),
+		OpenLibraryID: mux.Vars(request)["openLibraryId"],
+	}
+	_, ebook, download, err := api.openEbook(request.Context(), query, ebookChoice{})
 	if err != nil {
 		return
 	}
 	defer download.Body.Close()
+	title := ebook.Title
+	if title == "" {
+		title = query.Title
+	}
 	sendAttachment(responseWriter, sendAttachmentInput{
-		Title:         scans.Title,
+		Title:         title,
 		Format:        string(ebook.Format),
 		ContentLength: download.ContentLength,
 		Body:          download.Body,
@@ -66,22 +77,45 @@ func sendAttachment(responseWriter http.ResponseWriter, input sendAttachmentInpu
 	}
 }
 
-// openPublicEbook starts downloading the ebook of a public domain work from
-// the Internet Archive.
-func (api *API) openPublicEbook(ctx context.Context, openLibraryID string) (openlibrary.Scans, internetarchive.Ebook, internetarchive.Download, error) {
-	scans, err := api.openLibrary.PublicScans(openLibraryID)
-	if err != nil {
-		return openlibrary.Scans{}, internetarchive.Ebook{}, internetarchive.Download{}, err
+// ebookChoice is an ebook the user picked from a source; left empty, the
+// sources are asked in order.
+type ebookChoice struct {
+	SourceID string `json:"sourceId"`
+	EbookID  string `json:"ebookId"`
+}
+
+// openEbook starts fetching the chosen ebook, or the preferred ebook of the
+// first enabled source that has the book, and returns where it came from.
+func (api *API) openEbook(ctx context.Context, query booksource.Query, choice ebookChoice) (models.EbookSource, booksource.Ebook, booksource.Download, error) {
+	var source models.EbookSource
+	var ebook booksource.Ebook
+	var err error
+	if choice.SourceID != "" {
+		source, err = api.sourceStore.Get(choice.SourceID)
+		ebook = booksource.Ebook{ID: choice.EbookID, Title: query.Title}
+	} else {
+		var sources []models.EbookSource
+		if sources, err = api.sourceStore.List(); err == nil {
+			source, ebook, err = api.ebookSources.FindFirst(ctx, sources, query)
+		}
 	}
-	ebook, err := api.internetArchive.FindEbook(scans.ArchiveIDs)
 	if err != nil {
-		return openlibrary.Scans{}, internetarchive.Ebook{}, internetarchive.Download{}, err
+		return models.EbookSource{}, booksource.Ebook{}, booksource.Download{}, err
 	}
-	download, err := api.internetArchive.OpenEbook(ctx, ebook)
+	opened, err := api.ebookSources.Open(source)
 	if err != nil {
-		return openlibrary.Scans{}, internetarchive.Ebook{}, internetarchive.Download{}, err
+		return models.EbookSource{}, booksource.Ebook{}, booksource.Download{}, err
 	}
-	return scans, ebook, download, nil
+	download, err := opened.OpenEbook(ctx, ebook.ID)
+	if err != nil {
+		return models.EbookSource{}, booksource.Ebook{}, booksource.Download{}, err
+	}
+	return source, ebook, download, nil
+}
+
+// queryOf is what to ask ebook sources for to find a book.
+func queryOf(book models.Book) booksource.Query {
+	return booksource.Query{Title: book.Title, Author: book.Author, ISBN: book.ISBN, OpenLibraryID: book.OpenLibraryID}
 }
 
 // fileNameOf keeps a title to the characters safe in a file name.

@@ -6,6 +6,7 @@ import (
 
 	"github.com/kduong-dev/goutil/httpx"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/bookfilestore"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/booksource"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/bookstore"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/devicestore"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/devicesync"
@@ -13,6 +14,7 @@ import (
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/internetarchive"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/openlibrary"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/remarkable"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/sourcestore"
 )
 
 // merrifiedSentinels are the errors a client can cause, and how each is sent
@@ -34,6 +36,19 @@ var merrifiedSentinels = httpx.MerrifiedSentinels{
 	{Sentinel: remarkable.ErrHostKeyChanged, StatusCode: http.StatusBadGateway, UserMessage: "the tablet identified itself differently than when it was paired; if you factory-reset or replaced it, pair it again, otherwise something on your network may be impersonating it"},
 	{Sentinel: remarkable.ErrRestartFailed, StatusCode: http.StatusBadGateway, UserMessage: "books were copied to the tablet, but its reading app didn't restart to show them; press Sync now to try again"},
 	{Sentinel: remarkable.ErrTabletUnreachable, StatusCode: http.StatusGatewayTimeout, UserMessage: "couldn't reach the tablet; it may be asleep or off the network"},
+	{Sentinel: sourcestore.ErrSourceNotFound, StatusCode: http.StatusNotFound, UserMessage: "no ebook source with that id"},
+	{Sentinel: sourcestore.ErrBuiltInSource, StatusCode: http.StatusBadRequest, UserMessage: "the Internet Archive source is built in; disable it instead"},
+	{Sentinel: sourcestore.ErrSourceExists, StatusCode: http.StatusConflict, UserMessage: "that source is already added"},
+	{Sentinel: sourcestore.ErrInvalidOrder, StatusCode: http.StatusBadRequest, UserMessage: "the order must list every source once"},
+	{Sentinel: booksource.ErrUnknownKind, StatusCode: http.StatusBadRequest, UserMessage: "choose a plugin or an OPDS catalog"},
+	{Sentinel: booksource.ErrInvalidURL, StatusCode: http.StatusBadRequest, UserMessage: "enter an http or https URL"},
+	{Sentinel: booksource.ErrNotPlugin, StatusCode: http.StatusBadRequest, UserMessage: "no ebook source plugin answered at that URL"},
+	{Sentinel: booksource.ErrNotOPDS, StatusCode: http.StatusBadRequest, UserMessage: "that URL isn't an OPDS catalog"},
+	{Sentinel: booksource.ErrNotSearchable, StatusCode: http.StatusBadRequest, UserMessage: "that OPDS catalog can't be searched, so books can't be found in it"},
+	{Sentinel: booksource.ErrNoEbook, StatusCode: http.StatusNotFound, UserMessage: "none of your ebook sources has this book"},
+	{Sentinel: booksource.ErrEbookNotFound, StatusCode: http.StatusNotFound, UserMessage: "the source no longer has that ebook"},
+	{Sentinel: booksource.ErrInvalidEbookID, StatusCode: http.StatusBadRequest, UserMessage: "that isn't an ebook from this source"},
+	{Sentinel: booksource.ErrSourceUnavailable, StatusCode: http.StatusBadGateway, UserMessage: "the ebook source didn't answer, try again shortly"},
 	{Sentinel: openlibrary.ErrEmptyQuery, StatusCode: http.StatusBadRequest, UserMessage: "enter a title, author or ISBN, or pick a genre"},
 	{Sentinel: openlibrary.ErrQueryTooShort, StatusCode: http.StatusBadRequest, UserMessage: fmt.Sprintf("search for at least %d characters", openlibrary.MinimumQueryLength)},
 	{Sentinel: openlibrary.ErrQueryRejected, StatusCode: http.StatusBadRequest, UserMessage: "Open Library can't search for that, try a more specific search"},

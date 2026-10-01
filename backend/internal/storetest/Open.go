@@ -9,6 +9,7 @@ import (
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/database"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/devicestore"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/documentstore"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/sourcestore"
 )
 
 // Open opens a database in the test's temporary directory, closed when the
@@ -25,6 +26,7 @@ type Stores struct {
 	BookStore      bookstore.Store
 	DeviceStore    devicestore.Store
 	DocumentStore  documentstore.Store
+	SourceStore    sourcestore.Store
 	StorageService *FakeStorageService
 }
 
@@ -41,6 +43,7 @@ func OpenStores(t *testing.T) Stores {
 		BookStore:      bookstore.NewSQLiteStore(opened),
 		DeviceStore:    devicestore.NewSQLiteStore(opened),
 		DocumentStore:  documentstore.NewSQLiteStore(opened),
+		SourceStore:    sourcestore.NewSQLiteStore(opened),
 		StorageService: storageService,
 	}
 }

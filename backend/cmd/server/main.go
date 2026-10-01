@@ -19,6 +19,7 @@ import (
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/internetarchive"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/openlibrary"
 	"github.com/kduong-dev/reMarkableShelf/backend/internal/remarkable"
+	"github.com/kduong-dev/reMarkableShelf/backend/internal/sourcestore"
 	"github.com/kduong-dev/storage-service/pkg/storageservice"
 )
 
@@ -67,6 +68,7 @@ func main() {
 		DocumentStore:   documentStore,
 		InternetArchive: internetarchive.NewClient(),
 		OpenLibrary:     openlibrary.NewClient(),
+		SourceStore:     sourcestore.NewSQLiteStore(opened),
 		Syncer:          syncer,
 	})
 
